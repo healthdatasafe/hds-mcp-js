@@ -2,6 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { connectInput, connectHandler } from './tools/connect.ts';
 import { listStreamsInput, listStreamsHandler } from './tools/listStreams.ts';
 import { getEventsInput, getEventsHandler } from './tools/getEvents.ts';
+import { createEventInput, createEventHandler } from './tools/createEvent.ts';
+import { importBatchInput, importBatchHandler } from './tools/importBatch.ts';
 import { scrubError } from './lib/scrubber.ts';
 
 function wrap<T> (handler: (a: T) => Promise<any>) {
@@ -21,7 +23,7 @@ function wrap<T> (handler: (a: T) => Promise<any>) {
 export function buildServer (): McpServer {
   const server = new McpServer({
     name: 'hds-mcp',
-    version: '0.0.1'
+    version: '0.0.2'
   });
 
   server.tool(
@@ -43,6 +45,20 @@ export function buildServer (): McpServer {
     'Get events (data points) from the connected HDS account, optionally filtered by stream, type, or time range.',
     getEventsInput,
     wrap(getEventsHandler)
+  );
+
+  server.tool(
+    'create_event',
+    'Create a single event (data point) in the connected HDS account. Refuses on production until the production-write gate is opened.',
+    createEventInput,
+    wrap(createEventHandler)
+  );
+
+  server.tool(
+    'import_batch',
+    'Import many events at once (1–500 per call). Refuses on production until the production-write gate is opened.',
+    importBatchInput,
+    wrap(importBatchHandler)
   );
 
   return server;
