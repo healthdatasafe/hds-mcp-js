@@ -1,0 +1,51 @@
+{
+  "name": "hds-mcp",
+  "version": "0.0.1",
+  "description": "MCP server exposing Health Data Safe / Pryv tools to AI agents (non-developer first)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "hds-mcp": "src/index.ts"
+  },
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "node src/index.ts",
+    "test": "node --test 'tests/**/*.test.ts'",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/healthdatasafe/hds-mcp-js.git"
+  },
+  "keywords": [
+    "HDS",
+    "Health",
+    "Data",
+    "Safe",
+    "Pryv",
+    "MCP",
+    "Claude",
+    "agent",
+    "Model Context Protocol"
+  ],
+  "author": "Health Data Safe",
+  "license": "BSD-3-Clause",
+  "bugs": {
+    "url": "https://github.com/healthdatasafe/hds-mcp-js/issues"
+  },
+  "homepage": "https://github.com/healthdatasafe/hds-mcp-js#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "open": "^10.1.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "neostandard": "^0.12.0",
+    "typescript": "^5.6.0",
+    "typescript-eslint": "^8.0.0"
+  }
+}
