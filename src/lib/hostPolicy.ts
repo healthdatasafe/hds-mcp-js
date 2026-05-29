@@ -1,6 +1,6 @@
 export const SERVICE_INFO = {
-  demo: 'https://reg.demo.datasafe.dev/service/info',
-  prod: 'https://reg.datasafe.dev/service/info'
+  demo: 'https://demo.datasafe.dev/reg/service/info',
+  prod: 'https://reg.api.datasafe.dev/service/info'
 } as const;
 
 export type HostAlias = keyof typeof SERVICE_INFO;
@@ -15,7 +15,7 @@ export function resolveServiceInfoUrl (host?: string): string {
 export function isProdHost (apiEndpoint: string): boolean {
   try {
     const host = new URL(apiEndpoint).hostname;
-    return !host.endsWith('.demo.datasafe.dev') && host.endsWith('.datasafe.dev');
+    return host.endsWith('.api.datasafe.dev');
   } catch {
     return false;
   }

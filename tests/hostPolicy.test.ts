@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import { resolveServiceInfoUrl, isProdHost, assertWriteAllowed, PROD_WRITES_ENABLED } from '../src/lib/hostPolicy.ts';
 
 test('resolveServiceInfoUrl defaults to demo', () => {
-  assert.equal(resolveServiceInfoUrl(), 'https://reg.demo.datasafe.dev/service/info');
-  assert.equal(resolveServiceInfoUrl(undefined), 'https://reg.demo.datasafe.dev/service/info');
-  assert.equal(resolveServiceInfoUrl(''), 'https://reg.demo.datasafe.dev/service/info');
+  assert.equal(resolveServiceInfoUrl(), 'https://demo.datasafe.dev/reg/service/info');
+  assert.equal(resolveServiceInfoUrl(undefined), 'https://demo.datasafe.dev/reg/service/info');
+  assert.equal(resolveServiceInfoUrl(''), 'https://demo.datasafe.dev/reg/service/info');
 });
 
 test('resolveServiceInfoUrl maps demo / prod aliases', () => {
-  assert.equal(resolveServiceInfoUrl('demo'), 'https://reg.demo.datasafe.dev/service/info');
-  assert.equal(resolveServiceInfoUrl('prod'), 'https://reg.datasafe.dev/service/info');
+  assert.equal(resolveServiceInfoUrl('demo'), 'https://demo.datasafe.dev/reg/service/info');
+  assert.equal(resolveServiceInfoUrl('prod'), 'https://reg.api.datasafe.dev/service/info');
 });
 
 test('resolveServiceInfoUrl passes through full URLs', () => {
@@ -27,7 +27,11 @@ test('isProdHost: demo apiEndpoint is not prod', () => {
 });
 
 test('isProdHost: prod apiEndpoint is prod', () => {
-  assert.equal(isProdHost('https://tok@alice.datasafe.dev/'), true);
+  assert.equal(isProdHost('https://tok@alice.api.datasafe.dev/'), true);
+});
+
+test('isProdHost: bare datasafe.dev is not prod (apiEndpoints use *.api.datasafe.dev)', () => {
+  assert.equal(isProdHost('https://tok@alice.datasafe.dev/'), false);
 });
 
 test('isProdHost: unrelated host is not prod', () => {
@@ -44,7 +48,7 @@ test('assertWriteAllowed: prod refused when flag is false', () => {
     return;
   }
   assert.throws(
-    () => assertWriteAllowed('https://tok@alice.datasafe.dev/'),
+    () => assertWriteAllowed('https://tok@alice.api.datasafe.dev/'),
     /Writes to the production HDS host are disabled/
   );
 });

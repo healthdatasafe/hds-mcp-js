@@ -6,8 +6,8 @@ export const createEventInput = {
     'Stream IDs the event belongs to. Use list_streams to discover. At least one required.'
   ),
   type: z.string().describe(
-    'Event type, e.g. "mass/kg", "note/txt", "temperature/c", "body-vulva/bleeding". ' +
-    'Use search_event_types (v0.3) to find the right one.'
+    'Event type, e.g. "mass/kg", "note/txt", "temperature/c", "checkbox/null". ' +
+    'For HDS-specific items, use search_items first to get the streamId+eventType pair.'
   ),
   content: z.unknown().optional().describe(
     'Event content. Shape depends on type — typically a number, string, or object with the value.'

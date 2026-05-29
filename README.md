@@ -1,8 +1,9 @@
 # hds-mcp
 
-> **Status: v0.2 — read + write on demo.** Your AI agent can sign you in to
-> a throwaway demo HDS account, read your data, and write to it (create
-> single events or import a batch). Production writes are still gated off
+> **Status: v0.3 — read + write + HDS data-model search.** Your AI agent
+> can sign you in to a throwaway demo HDS account, search the HDS item
+> catalogue for the right event shape, read your data, and write to it
+> (single events or batch import). Production writes are still gated off
 > by default — see [Why "demo only" for now](#why-demo-only-for-now).
 
 Connect [Health Data Safe](https://datasafe.dev) to your AI agent (Claude
@@ -100,7 +101,7 @@ That's it. The connection lasts until you quit Claude Desktop.
 
 ## What the tools do
 
-The MCP exposes five tools to your agent. **You don't call them directly —**
+The MCP exposes seven tools to your agent. **You don't call them directly —**
 you just ask your agent in plain language. The agent picks the right tool.
 
 | Tool | What it does | Plain-language prompt |
@@ -108,6 +109,8 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `connect` | Sign you into demo HDS via your browser | *"Sign me in to demo HDS."* |
 | `list_streams` | Show the tree of data containers in your account | *"What streams do I have?"* |
 | `get_events` | Read events (data points) — filterable by stream / type / time | *"Get my last week of body events."* |
+| `search_items` | Search the HDS data-model for the right item to log | *"What HDS item should I use for basal body temperature?"* |
+| `get_item` | Get the full definition of one HDS item by key | *"Show me the spec for body-weight."* |
 | `create_event` | Write a single event into a stream | *"Log my weight as 72 kg right now."* |
 | `import_batch` | Write up to 500 events in one call | *"Import every row of this CSV as a temperature event."* |
 
@@ -155,10 +158,10 @@ in v0 even if you pass `host: "prod"`.
 
 ## Roadmap
 
-- **v0.2 (current)** — write tools (`create_event`, `import_batch`) on demo.
-- **v0.3** — event-type search (`search_event_types` + `get_event_type_spec`)
-  driven by the HDS data-model; end-to-end fertility-charts pilot.
-- **v0.4** — full auto-generated tool surface from `hds-lib-js` +
+- **v0.3 (current)** — `search_items` + `get_item` backed by the published
+  HDS data-model (`pack.json` at `model.datasafe.dev`).
+- **v0.4** — end-to-end fertility-charts pilot, friction notes published.
+- **v0.5** — full auto-generated tool surface from `hds-lib-js` +
   `hds-forms-js`, tiered (essential / extended / advanced).
 - **v1** — production-write gate flipped on; published to the MCP registry.
 - **Later** — hosted MCP endpoint; in-repo Claude Code app-dev scaffold.
@@ -188,6 +191,10 @@ src/
     getEvents.ts
     createEvent.ts
     importBatch.ts
+    searchItems.ts
+    getItem.ts
+  dataModel/
+    pack.ts            # fetches + caches model.datasafe.dev/pack.json
   lib/
     scrubber.ts        # centralized token redactor (mandatory on every log/error)
     hostPolicy.ts      # demo-default; PROD_WRITES_ENABLED gate
