@@ -3,11 +3,13 @@ import { apiPost } from '../lib/apiCall.ts';
 
 export const createEventInput = {
   streamIds: z.array(z.string()).min(1).describe(
-    'Stream IDs the event belongs to. Use list_streams to discover. At least one required.'
+    'Stream IDs the event belongs to. For HDS items, use the canonical streamId from get_item; ' +
+    'for user-created streams, use list_streams to discover. At least one required.'
   ),
   type: z.string().describe(
-    'Event type, e.g. "mass/kg", "note/txt", "temperature/c", "checkbox/null". ' +
-    'For HDS-specific items, use search_items first to get the streamId+eventType pair.'
+    'Event type. Use the eventType returned by get_item for the canonical HDS item ' +
+    '(call search_items → get_item first). Examples: "mass/kg", "note/txt", "temperature/c", "checkbox/null". ' +
+    'Do not invent types — if no HDS item matches, ask the user.'
   ),
   content: z.unknown().optional().describe(
     'Event content. Shape depends on type — typically a number, string, or object with the value.'

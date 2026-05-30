@@ -12,7 +12,8 @@ const eventSchema = z.object({
 
 export const importBatchInput = {
   events: z.array(eventSchema).min(1).max(500).describe(
-    'Events to import. 1–500 per call. Each must have streamIds and type.'
+    'Events to import. 1–500 per call. Each must have streamIds and type — ' +
+    'use the values from get_item for the matching HDS item (call search_items first).'
   )
 };
 
