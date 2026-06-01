@@ -9,7 +9,8 @@ export const connectInput = {
     'You can also pass a full service-info URL.'
   ),
   level: z.enum(['read', 'contribute', 'manage']).optional().describe(
-    "Permission level requested. 'read' (default, safe), 'contribute' (read+write events), or 'manage' (also stream config)."
+    "Permission level requested. 'contribute' (default — read+write events; covers create_event / import_batch / the pilot scenario), " +
+    "'read' (read-only), or 'manage' (also stream config). Pick 'read' only when the user explicitly asks for a read-only session."
   )
 };
 
@@ -19,7 +20,7 @@ export async function connectHandler (
   const serviceInfoUrl = resolveServiceInfoUrl(host);
   const permissions: RequestedPermission[] = [{
     streamId: '*',
-    level: level ?? 'read',
+    level: level ?? 'contribute',
     defaultName: 'All HDS data'
   }];
   const { apiEndpoint, username } = await runAuthFlow(serviceInfoUrl, permissions);

@@ -1,10 +1,12 @@
 # hds-mcp
 
-> **Status: v0.3 — read + write + HDS data-model search.** Your AI agent
-> can sign you in to a throwaway demo HDS account, search the HDS item
-> catalogue for the right event shape, read your data, and write to it
-> (single events or batch import). Production writes are still gated off
-> by default — see [Why "demo only" for now](#why-demo-only-for-now).
+> **Status: v0.0.6 — read + write + HDS data-model search + pilot-tightened
+> auth.** Your AI agent can sign you in to a throwaway demo HDS account
+> (now with read+write permissions by default so `create_event` /
+> `import_batch` work out of the box), search the HDS item catalogue for
+> the right event shape, read your data, and write to it (single events
+> or batch import). Production writes are still gated off by default —
+> see [Why "demo only" for now](#why-demo-only-for-now).
 
 Connect [Health Data Safe](https://datasafe.dev) to your AI agent (Claude
 Desktop, ChatGPT desktop, Cursor, …) so it can sign you in, read your data,
@@ -12,7 +14,7 @@ and help you make sense of it. No coding required.
 
 ---
 
-## What you'll be able to do (v0.2)
+## What you'll be able to do
 
 Ask your agent things like:
 
@@ -158,13 +160,15 @@ in v0 even if you pass `host: "prod"`.
 
 ## Roadmap
 
-- **v0.3 (current)** — `search_items` + `get_item` backed by the published
-  HDS data-model (`pack.json` at `model.datasafe.dev`).
-- **v0.4** — end-to-end fertility-charts pilot, friction notes published.
-- **v0.5** — full auto-generated tool surface from `hds-lib-js` +
+- **v0.0.6 (current)** — `search_items` + `get_item` backed by the published
+  HDS data-model (`pack.json` at `model.datasafe.dev`); pilot-tightened
+  auth (read+write by default; fixed `info.access` POST URL + snake_case
+  `poll_rate_ms`).
+- **next** — end-to-end fertility-charts pilot, friction notes published.
+- **later (v0.5)** — full auto-generated tool surface from `hds-lib-js` +
   `hds-forms-js`, tiered (essential / extended / advanced).
 - **v1** — production-write gate flipped on; published to the MCP registry.
-- **Later** — hosted MCP endpoint; in-repo Claude Code app-dev scaffold.
+- **after v1** — hosted MCP endpoint; in-repo Claude Code app-dev scaffold.
 
 ---
 

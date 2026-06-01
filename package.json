@@ -1,6 +1,6 @@
 {
   "name": "hds-mcp",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "MCP server exposing Health Data Safe / Pryv tools to AI agents (non-developer first)",
   "type": "module",
   "engines": {
