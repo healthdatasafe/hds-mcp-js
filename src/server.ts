@@ -25,7 +25,7 @@ function wrap<T> (handler: (a: T) => Promise<any>) {
 export function buildServer (): McpServer {
   const server = new McpServer({
     name: 'hds-mcp',
-    version: '0.0.4'
+    version: '0.0.5'
   });
 
   server.tool(

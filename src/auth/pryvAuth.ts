@@ -18,7 +18,7 @@ interface AuthRequestResponse {
   url?: string;
   authUrl?: string;
   poll?: string;
-  pollRateMs?: number;
+  poll_rate_ms?: number;
   apiEndpoint?: string;
   username?: string;
   token?: string;
@@ -45,7 +45,10 @@ export async function runAuthFlow (
 ): Promise<{ apiEndpoint: string; username: string }> {
   const info = await fetchServiceInfo(serviceInfoUrl);
 
-  const initRes = await fetch(info.access + APP_ID, {
+  // POST the bare `info.access` URL — the appId is carried in the body as
+  // `requestingAppId`. POSTing to `info.access + APP_ID` hits the sign-in
+  // page's result-reporting endpoint and returns HTTP 400.
+  const initRes = await fetch(info.access, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -68,7 +71,7 @@ export async function runAuthFlow (
   await open(authUrl);
 
   const pollUrl = init.poll;
-  const intervalMs = init.pollRateMs ?? POLL_INTERVAL_MS_DEFAULT;
+  const intervalMs = init.poll_rate_ms ?? POLL_INTERVAL_MS_DEFAULT;
   const deadline = Date.now() + POLL_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
