@@ -1,8 +1,9 @@
 # hds-mcp
 
-> **Status: v0.0.6 — read + write + HDS data-model search + pilot-tightened
-> auth.** Your AI agent can sign you in to a throwaway demo HDS account
-> (now with read+write permissions by default so `create_event` /
+> **Status: v0.0.7 — one-line install straight from GitHub.** No clone, no
+> build: `npx -y github:healthdatasafe/hds-mcp-js` (see Install below).
+> Your AI agent can sign you in to a throwaway demo HDS account
+> (with read+write permissions by default so `create_event` /
 > `import_batch` work out of the box), search the HDS item catalogue for
 > the right event shape, read your data, and write to it (single events
 > or batch import). Production writes are still gated off by default —
@@ -64,7 +65,7 @@ A JSON file opens. If it's empty, paste this:
   "mcpServers": {
     "hds": {
       "command": "npx",
-      "args": ["-y", "hds-mcp"]
+      "args": ["-y", "github:healthdatasafe/hds-mcp-js"]
     }
   }
 }
@@ -160,7 +161,10 @@ in v0 even if you pass `host: "prod"`.
 
 ## Roadmap
 
-- **v0.0.6 (current)** — `search_items` + `get_item` backed by the published
+- **v0.0.7 (current)** — installable with one line via
+  `npx -y github:healthdatasafe/hds-mcp-js`: ships compiled JS (`dist/`,
+  built on install) so `npx` works without the npm registry.
+- **v0.0.6** — `search_items` + `get_item` backed by the published
   HDS data-model (`pack.json` at `model.datasafe.dev`); pilot-tightened
   auth (read+write by default; fixed `info.access` POST URL + snake_case
   `poll_rate_ms`).
