@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { connectInput, connectHandler } from './tools/connect.ts';
 import { listStreamsInput, listStreamsHandler } from './tools/listStreams.ts';
@@ -22,10 +23,15 @@ function wrap<T> (handler: (a: T) => Promise<any>) {
   };
 }
 
+// One level below the package root in both layouts (src/ and dist/).
+const { version } = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+);
+
 export function buildServer (): McpServer {
   const server = new McpServer({
     name: 'hds-mcp',
-    version: '0.0.6'
+    version
   });
 
   server.tool(
