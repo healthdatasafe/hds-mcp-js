@@ -22,7 +22,8 @@ ship filesystem I/O, OCR, vision, Excel parsing, or any composition
 beyond mapping MCP tool calls to Pryv API calls. The agent's client is
 expected to provide everything else.
 
-Design choices, all locked in `_plans/68-agents-exposure-atwork/PLAN.md`:
+Design choices (locked during the v1 scoping; tracked in the project's
+planning issues — see [healthdatasafe/_macro#23](https://github.com/healthdatasafe/_macro/issues/23)):
 
 - **Hand-written tool surface for v1.** Auto-generation from
   `hds-lib-js` + `hds-forms-js` types is the v0.5 goal. Hand-writing the
@@ -46,14 +47,14 @@ Design choices, all locked in `_plans/68-agents-exposure-atwork/PLAN.md`:
 
 ---
 
-## Tool catalogue (v0.0.6, tier=essential)
+## Tool catalogue (v0.0.7, tier=essential)
 
 All seven tools are tagged `essential` and exposed by default. The
 `extended` and `advanced` tiers are reserved for the v0.5 auto-gen pass.
 
 | Tool                  | Purpose                                                                 | Notable behaviour                                                                                                                                                                                                                                                                                                                  |
 |-----------------------|-------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`connect`**         | OAuth (Pryv poll-mode) — opens browser, polls until accept              | Defaults: `host: "demo"`, `level: "contribute"`. Other levels: `read`, `manage`. Returns `apiEndpoint` (held in-memory in [`auth/session.ts`](src/auth/session.ts)).                                                                                                                                                                |
+| **`connect`**         | OAuth (Pryv poll-mode) — opens browser, polls until accept              | Defaults: `host: "demo"`, `level: "contribute"`, scope **all streams** (`streamId: "*"` — per-stream scoping not yet supported). Other levels: `read`, `manage`. Returns `apiEndpoint` (held in-memory in [`auth/session.ts`](src/auth/session.ts)).                                                                                |
 | **`list_streams`**    | List the user's stream tree                                             | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
 | **`get_events`**      | Query events, filtered by stream / type / time range                    | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
 | **`search_items`**    | Search the HDS data-model catalogue                                     | Backed by [`dataModel/pack.ts`](src/dataModel/pack.ts) which fetches + caches `model.datasafe.dev/pack.json`. Scoring in [`tools/searchItems.ts`](src/tools/searchItems.ts) — exact-key match > exact-label match > substring matches.                                                                                              |
@@ -101,7 +102,7 @@ If no item matches, surface that to the user — the MCP does not invent.
 
 ---
 
-## Error shapes (verbatim, as of v0.0.6)
+## Error shapes (verbatim, as of v0.0.7)
 
 | Trigger                                       | Message                                                                                  |
 |-----------------------------------------------|------------------------------------------------------------------------------------------|
@@ -139,9 +140,9 @@ underlying error body shape is
 5. Add tests under [`tests/`](tests/) — at minimum, type-check + lint
    pass + any new error message is tested for verbatim wording (we
    publish error wording in `llms-full.txt`).
-6. Bump `version` in [`package.json`](package.json) **and**
-   [`src/server.ts`](src/server.ts) (the MCP server-name version is
-   used by some clients for caching).
+6. Bump `version` in [`package.json`](package.json) — `src/server.ts`
+   reads it at runtime (since v0.0.7), so there is nothing to bump in
+   code.
 
 ---
 
@@ -186,9 +187,8 @@ pilot runs.
   docs cite it. When you change a description, also update
   `llms-full.txt` §4a and §7 in the same PR cycle.
 - **[_macro](https://github.com/healthdatasafe/_macro)** — the workspace
-  meta-repo where plans 68, 69 etc. are tracked. SessionState in
-  `_plans/68-agents-exposure-atwork/SessionState.md` carries the
-  ongoing pilot notes.
+  meta-repo whose issue tracker carries this project's planning and
+  pilot notes (e.g. [#23](https://github.com/healthdatasafe/_macro/issues/23)).
 
 ---
 

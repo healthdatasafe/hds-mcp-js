@@ -93,7 +93,10 @@ Open a new chat in Claude Desktop and type:
 
 Claude will ask permission to call the `connect` tool. Approve it. Your
 browser opens to **demo.datasafe.dev**. Sign up (it's instant, no email
-verification) or sign in if you already have a demo account.
+verification) or sign in if you already have a demo account. A consent
+screen then shows what's requested — **all your HDS data, with
+read+write ("contribute") access** — click Accept. Demo accounts are
+throwaway sandboxes, so this is safe to approve.
 
 When the browser shows "you're signed in", come back to Claude Desktop.
 Claude will continue automatically and confirm your connection.
