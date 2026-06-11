@@ -36,25 +36,29 @@ planning issues — see [healthdatasafe/_macro#23](https://github.com/healthdata
   runs through [`lib/scrubber.ts`](src/lib/scrubber.ts). Unit-tested.
   Hard rule — do not add a `console.log` or `process.stderr.write`
   that bypasses it.
-- **Production-write gate.** `create_event` and `import_batch` refuse
-  on prod hosts unless `HDS_MCP_PROD_WRITES_ENABLED=true` is set in
-  the MCP environment. Enforced in
+- **Production-write gate (session opt-in since v0.1.0).** `create_event`
+  and `import_batch` refuse on prod hosts unless the session was opened
+  with `connect({ host: "prod", enableWrites: true })` — which the agent
+  may only pass when the user explicitly asked to write to production.
+  `HDS_MCP_PROD_WRITES_ENABLED=true` in the MCP environment remains as a
+  global override. Enforced in
   [`lib/hostPolicy.ts`](src/lib/hostPolicy.ts) +
-  [`lib/apiCall.ts`](src/lib/apiCall.ts).
+  [`lib/apiCall.ts`](src/lib/apiCall.ts); the session flag lives in
+  [`auth/session.ts`](src/auth/session.ts) and resets on every restart.
 - **No mutation gating at the MCP layer** beyond the prod-write gate —
   rely on the client's per-tool-call permission prompt (Claude Desktop /
   ChatGPT already do this).
 
 ---
 
-## Tool catalogue (v0.0.7, tier=essential)
+## Tool catalogue (v0.1.0, tier=essential)
 
 All seven tools are tagged `essential` and exposed by default. The
 `extended` and `advanced` tiers are reserved for the v0.5 auto-gen pass.
 
 | Tool                  | Purpose                                                                 | Notable behaviour                                                                                                                                                                                                                                                                                                                  |
 |-----------------------|-------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`connect`**         | OAuth (Pryv poll-mode) — opens browser, polls until accept              | Defaults: `host: "demo"`, `level: "contribute"`, scope **all streams** (`streamId: "*"` — per-stream scoping not yet supported). Other levels: `read`, `manage`. Returns `apiEndpoint` (held in-memory in [`auth/session.ts`](src/auth/session.ts)).                                                                                |
+| **`connect`**         | OAuth (Pryv poll-mode) — opens browser, polls until accept              | Defaults: `host: "demo"`, `level: "contribute"`, scope **all streams** (`streamId: "*"` — per-stream scoping not yet supported). Other levels: `read`, `manage`. `enableWrites: true` (only with `host: "prod"`, only on the user's explicit ask) unlocks prod writes for the session. Returns `apiEndpoint` (held in-memory in [`auth/session.ts`](src/auth/session.ts)). |
 | **`list_streams`**    | List the user's stream tree                                             | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
 | **`get_events`**      | Query events, filtered by stream / type / time range                    | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
 | **`search_items`**    | Search the HDS data-model catalogue                                     | Backed by [`dataModel/pack.ts`](src/dataModel/pack.ts) which fetches + caches `model.datasafe.dev/pack.json`. Scoring in [`tools/searchItems.ts`](src/tools/searchItems.ts) — exact-key match > exact-label match > substring matches.                                                                                              |
@@ -102,13 +106,13 @@ If no item matches, surface that to the user — the MCP does not invent.
 
 ---
 
-## Error shapes (verbatim, as of v0.0.7)
+## Error shapes (verbatim, as of v0.1.0)
 
 | Trigger                                       | Message                                                                                  |
 |-----------------------------------------------|------------------------------------------------------------------------------------------|
 | No `connect` called yet                       | ``Not connected. Run the `hds.connect` tool first.``                                     |
 | Unknown host alias                            | ``Unrecognised host: X. Use 'demo', 'prod', or a full service-info URL.``                |
-| Prod write while gate is closed               | ``Writes to the production HDS host are disabled in this build of hds-mcp. …``           |
+| Prod write while gate is closed               | ``Writes to the production HDS host are disabled for this session. If the user explicitly asked to write to their production account, re-run connect with { host: 'prod', enableWrites: true } …`` |
 | OAuth refused                                 | ``auth refused: <reason>``                                                               |
 | OAuth poll timed out                          | ``auth timed out — please re-run hds.connect``                                           |
 | Pryv API (GET) error                          | ``Pryv <path> failed: <upstream message>``                                               |

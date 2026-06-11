@@ -23,11 +23,13 @@ export function isProdHost (apiEndpoint: string): boolean {
 
 export const PROD_WRITES_ENABLED = process.env.HDS_MCP_PROD_WRITES_ENABLED === 'true';
 
-export function assertWriteAllowed (apiEndpoint: string): void {
-  if (isProdHost(apiEndpoint) && !PROD_WRITES_ENABLED) {
+export function assertWriteAllowed (apiEndpoint: string, sessionProdWritesEnabled = false): void {
+  if (isProdHost(apiEndpoint) && !sessionProdWritesEnabled && !PROD_WRITES_ENABLED) {
     throw new Error(
-      'Writes to the production HDS host are disabled in this build of hds-mcp. ' +
-      'Use a demo account (default) until the production-write gate is opened.'
+      'Writes to the production HDS host are disabled for this session. ' +
+      'If the user explicitly asked to write to their production account, re-run connect ' +
+      "with { host: 'prod', enableWrites: true } — they confirm on the sign-in consent screen. " +
+      'Otherwise stay on demo (the default).'
     );
   }
 }

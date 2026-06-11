@@ -40,15 +40,24 @@ test('isProdHost: unrelated host is not prod', () => {
 
 test('assertWriteAllowed: demo always allowed', () => {
   assert.doesNotThrow(() => assertWriteAllowed('https://tok@alice.demo.datasafe.dev/'));
+  assert.doesNotThrow(() => assertWriteAllowed('https://tok@alice.demo.datasafe.dev/', false));
 });
 
-test('assertWriteAllowed: prod refused when flag is false', () => {
+test('assertWriteAllowed: prod refused without session opt-in', () => {
   if (PROD_WRITES_ENABLED) {
-    // Flag is on (e.g. integration env) — skip the negative assertion.
+    // Env flag is on (e.g. integration env) — skip the negative assertion.
     return;
   }
   assert.throws(
     () => assertWriteAllowed('https://tok@alice.api.datasafe.dev/'),
-    /Writes to the production HDS host are disabled/
+    /Writes to the production HDS host are disabled for this session/
   );
+  assert.throws(
+    () => assertWriteAllowed('https://tok@alice.api.datasafe.dev/', false),
+    /enableWrites: true/
+  );
+});
+
+test('assertWriteAllowed: prod allowed with session opt-in (connect enableWrites)', () => {
+  assert.doesNotThrow(() => assertWriteAllowed('https://tok@alice.api.datasafe.dev/', true));
 });

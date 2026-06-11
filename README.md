@@ -1,13 +1,11 @@
 # hds-mcp
 
-> **Status: v0.0.7 — one-line install straight from GitHub.** No clone, no
-> build: `npx -y github:healthdatasafe/hds-mcp-js` (see Install below).
-> Your AI agent can sign you in to a throwaway demo HDS account
-> (with read+write permissions by default so `create_event` /
-> `import_batch` work out of the box), search the HDS item catalogue for
-> the right event shape, read your data, and write to it (single events
-> or batch import). Production writes are still gated off by default —
-> see [Why "demo only" for now](#why-demo-only-for-now).
+> **Status: v0.1.0 — production access when you're ready.** One-line
+> install (`npx -y github:healthdatasafe/hds-mcp-js`), demo sandbox by
+> default, and now a per-session opt-in for writing to your real
+> production account — you ask for it explicitly, the agent passes
+> `enableWrites: true`, you confirm on the consent screen. See
+> [Demo by default — production when you're ready](#demo-by-default--production-when-youre-ready).
 
 Connect [Health Data Safe](https://datasafe.dev) to your AI agent (Claude
 Desktop, ChatGPT desktop, Cursor, …) so it can sign you in, read your data,
@@ -122,16 +120,22 @@ you just ask your agent in plain language. The agent picks the right tool.
 
 ---
 
-## Why "demo only" for now
+## Demo by default — production when you're ready
 
-`hds-mcp` v0 defaults to `demo.datasafe.dev` — a throwaway sandbox. Tokens
-there are not secret and a mistake costs nothing. Once we've watched real
-users go through the connect + read flow without surprises, we'll open the
-production path in a follow-up release.
+`hds-mcp` defaults to `demo.datasafe.dev` — a throwaway sandbox. Tokens
+there are not secret and a mistake costs nothing. Learn the ropes there.
 
-You **can** read from production today by explicitly passing
-`host: "prod"` to the connect tool. Write tools targeting prod will refuse
-in v0 even if you pass `host: "prod"`.
+When you're ready to work on your **real** account:
+
+- **Reading** production works by just asking — the agent passes
+  `host: "prod"` to the connect tool.
+- **Writing** to production needs you to say so explicitly — e.g. *"sign
+  me in to production and enable writing"*. The agent then connects with
+  `enableWrites: true`, and you confirm the access on the sign-in consent
+  screen. Without that explicit ask, write tools refuse on production.
+
+The write unlock lasts for the session (until you quit the client) — the
+next session starts back in the safe state.
 
 ---
 
@@ -164,7 +168,10 @@ in v0 even if you pass `host: "prod"`.
 
 ## Roadmap
 
-- **v0.0.7 (current)** — installable with one line via
+- **v0.1.0 (current)** — production writes become a per-session user
+  opt-in: `connect({ host: "prod", enableWrites: true })`, only when the
+  user explicitly asks. Replaces the planned global gate-flip.
+- **v0.0.7** — installable with one line via
   `npx -y github:healthdatasafe/hds-mcp-js`: ships compiled JS (`dist/`,
   built on install) so `npx` works without the npm registry.
 - **v0.0.6** — `search_items` + `get_item` backed by the published
@@ -174,7 +181,8 @@ in v0 even if you pass `host: "prod"`.
 - **next** — end-to-end fertility-charts pilot, friction notes published.
 - **later (v0.5)** — full auto-generated tool surface from `hds-lib-js` +
   `hds-forms-js`, tiered (essential / extended / advanced).
-- **v1** — production-write gate flipped on; published to the MCP registry.
+- **v1** — published to the MCP registry. (The production-write gate-flip
+  originally slated here shipped early, as the v0.1.0 per-session opt-in.)
 - **after v1** — hosted MCP endpoint; in-repo Claude Code app-dev scaffold.
 
 ---
@@ -208,7 +216,7 @@ src/
     pack.ts            # fetches + caches model.datasafe.dev/pack.json
   lib/
     scrubber.ts        # centralized token redactor (mandatory on every log/error)
-    hostPolicy.ts      # demo-default; PROD_WRITES_ENABLED gate
+    hostPolicy.ts      # demo-default; prod-write gate (session opt-in or env override)
     apiCall.ts         # apiGet / apiPost / apiBatch; enforces the write gate
 tests/
   scrubber.test.ts     # pins the redactor contract

@@ -1,7 +1,9 @@
 let currentApiEndpoint: string | null = null;
+let prodWritesEnabled = false;
 
-export function setApiEndpoint (apiEndpoint: string): void {
+export function setApiEndpoint (apiEndpoint: string, enableProdWrites = false): void {
   currentApiEndpoint = apiEndpoint;
+  prodWritesEnabled = enableProdWrites;
 }
 
 export function getApiEndpoint (): string {
@@ -11,8 +13,13 @@ export function getApiEndpoint (): string {
   return currentApiEndpoint;
 }
 
+export function getProdWritesEnabled (): boolean {
+  return prodWritesEnabled;
+}
+
 export function clearApiEndpoint (): void {
   currentApiEndpoint = null;
+  prodWritesEnabled = false;
 }
 
 export function isConnected (): boolean {

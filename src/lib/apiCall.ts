@@ -1,4 +1,4 @@
-import { getApiEndpoint } from '../auth/session.ts';
+import { getApiEndpoint, getProdWritesEnabled } from '../auth/session.ts';
 import { assertWriteAllowed } from './hostPolicy.ts';
 
 interface ParsedEndpoint {
@@ -42,7 +42,7 @@ export async function apiGet (path: string, query?: Record<string, unknown>): Pr
 
 export async function apiPost (path: string, body: unknown): Promise<any> {
   const apiEndpoint = getApiEndpoint();
-  assertWriteAllowed(apiEndpoint);
+  assertWriteAllowed(apiEndpoint, getProdWritesEnabled());
   const { token, baseUrl } = parseApiEndpoint(apiEndpoint);
   const url = new URL(stripLeadingSlash(path), baseUrl);
   const res = await fetch(url, {
@@ -63,7 +63,7 @@ export async function apiBatch (
 ): Promise<any[]> {
   const apiEndpoint = getApiEndpoint();
   const writes = calls.filter((c) => !c.method.endsWith('.get') && !c.method.endsWith('.getOne'));
-  if (writes.length > 0) assertWriteAllowed(apiEndpoint);
+  if (writes.length > 0) assertWriteAllowed(apiEndpoint, getProdWritesEnabled());
   const { token, baseUrl } = parseApiEndpoint(apiEndpoint);
   const res = await fetch(baseUrl, {
     method: 'POST',
