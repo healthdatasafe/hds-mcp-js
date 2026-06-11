@@ -7,9 +7,9 @@ to understand the tool surface, the rules baked into the tool
 descriptions, and the design choices behind them.
 
 If you are an agent that **consumes** `hds-mcp` (Claude Desktop, ChatGPT
-desktop, …), the canonical reference is the docs site:
-<https://docs.datasafe.dev/developers/agents> and
-<https://docs.datasafe.dev/developers/llms-full.txt>. Read this AGENTS.md
+desktop, …), the canonical reference is the agents site:
+<https://agents.datasafe.dev> and
+<https://agents.datasafe.dev/llms-full.txt>. Read this AGENTS.md
 when you are editing the MCP code itself.
 
 ---
@@ -185,11 +185,13 @@ pilot runs.
   search, event POST). When you add a new tool whose logic already
   lives in `hds-lib`, prefer wrapping over re-implementing.
   See [hds-lib-js/AGENTS.md](https://github.com/healthdatasafe/hds-lib-js/blob/main/AGENTS.md).
-- **[dev-site](https://github.com/healthdatasafe/dev-site)** — owns
-  `docs.datasafe.dev/developers/` (`agents.mdx` + `llms-full.txt`).
-  Tool-description wording in this repo is the source of truth; the
-  docs cite it. When you change a description, also update
-  `llms-full.txt` §4a and §7 in the same PR cycle.
+- **[site-agents](https://github.com/healthdatasafe/site-agents)** — owns
+  `agents.datasafe.dev` (the agent-facing pages + the canonical
+  `llms-full.txt` and `bootstrap.txt`). Tool-description wording in this
+  repo is the source of truth; the docs cite it. When you change a
+  description, also update `llms-full.txt` §4a and §7 in the same PR
+  cycle. ([dev-site](https://github.com/healthdatasafe/dev-site) only
+  keeps a teaser page that links out.)
 - **[_macro](https://github.com/healthdatasafe/_macro)** — the workspace
   meta-repo whose issue tracker carries this project's planning and
   pilot notes (e.g. [#23](https://github.com/healthdatasafe/_macro/issues/23)).
