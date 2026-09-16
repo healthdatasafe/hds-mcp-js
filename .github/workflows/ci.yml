@@ -1,0 +1,38 @@
+name: HDS MCP JS CI
+
+on:
+  pull_request:
+    branches:
+      - '*'
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    strategy:
+      matrix:
+        node-version: [24.x]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Install Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build
+      run: npm run build
+
+    - name: Lint
+      run: npm run lint
+
+    - name: Test
+      run: npm test
