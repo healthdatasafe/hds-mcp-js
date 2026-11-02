@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-02
+
+Remote transport, preview, demo only (plan 118 phase 3a). Not deployed: the end-to-end spike needs core registry rows from
+plan 115.
+
+### Added
+- `hds-mcp-http` (`src/httpMain.ts`): the same tools over Streamable HTTP, stateless, one server per request, for a
+  deployment next to an HDS core. OAuth resource server only: it serves RFC 9728 protected-resource metadata naming
+  the core's issuer, and validates bearer tokens through the core's RFC 7662 introspection (confidential client,
+  60 s cache, audience checked when the token carries one). Production accounts are refused until token exchange
+  lands (plan 118 decision). Origin check; GET / DELETE answer 405; no `connect` tool over HTTP.
+- Server `instructions` carry the privacy disclosure, so it reaches clients on both transports.
+
+### Changed
+- Credentials are now per request (AsyncLocalStorage) on the HTTP transport; stdio keeps one session per process.
+  Tests prove interleaved requests never see each other's token.
+
 ## [0.4.0] - 2026-11-02
 
 Scoped access and read-back for imports (site-agents#36 A3, A6; plan 118 phase 2), following the import contract of

@@ -1,13 +1,14 @@
 {
   "name": "hds-mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "MCP server exposing Health Data Safe / Pryv tools to AI agents (non-developer first)",
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "bin": {
-    "hds-mcp": "dist/index.js"
+    "hds-mcp": "dist/index.js",
+    "hds-mcp-http": "dist/httpMain.js"
   },
   "main": "dist/index.js",
   "files": [
@@ -16,6 +17,7 @@
   ],
   "scripts": {
     "start": "node src/index.ts",
+    "start:http": "node src/httpMain.ts",
     "build": "tsc -p tsconfig.build.json",
     "prepare": "npm run build",
     "test": "node --test 'tests/**/*.test.ts'",
@@ -47,10 +49,12 @@
     "@modelcontextprotocol/sdk": "^1.0.0",
     "ajv": "^8.20.0",
     "ajv-draft-04": "^1.0.0",
+    "express": "^5.3.0",
     "open": "^10.1.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
     "neostandard": "^0.12.0",
     "typescript": "^5.6.0",

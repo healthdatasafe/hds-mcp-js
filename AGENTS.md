@@ -172,6 +172,21 @@ underlying error body shape is
 
 ---
 
+## Remote transport (preview, plan 118)
+
+`hds-mcp-http` serves the same tools (minus `connect`) over Streamable HTTP, for a deployment next to one HDS core
+(`mcp.<core-domain>`). Environment: `HDS_MCP_ISSUER` (the core's OAuth issuer), `HDS_MCP_PUBLIC_URL` (this
+server's MCP URL, also the expected token audience), `HDS_MCP_INTROSPECT_CLIENT_ID` / `_SECRET` (a confidential
+registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default), `HDS_MCP_ALLOWED_ORIGINS`, `PORT`.
+
+- **Credentials are per request.** [`auth/session.ts`](src/auth/session.ts) runs each HTTP request inside
+  AsyncLocalStorage; a request never falls back to the stdio globals, and `connect` refuses inside one. Never add
+  module-level state that holds a user's token or data: concurrent users share the process.
+- **Spike token handling** (perki, 2026-11-02): the API is called with the same token at the `api_base` the core's
+  introspection returns. The MCP spec forbids this passthrough; a separate credential through token exchange is a
+  gate before production, and production `api_base` hosts are refused until then.
+- One MCP per core: issuers are per core, and clients follow only the first `authorization_servers` entry.
+
 ## Source layout
 
 ```
@@ -197,7 +212,12 @@ tests/
   eventTypes.test.ts   # eventType resolution, validation, refusal wording
   codes.test.ts        # code extraction (all pack shapes), code + locale search, endpoint resolution
   phase2.test.ts       # events.get params (clientData filters, paging), delete order, model paths
+  session.test.ts      # per-request credential isolation
+  http.test.ts         # HTTP transport: 401 + metadata, origin check, per-user token isolation end to end
 ```
+
+`src/httpMain.ts` (HTTP entry) and `src/http/` (`app.ts`: express app; `introspection.ts`: token verifier) hold the
+remote transport.
 
 Auth flow is not unit-tested (network-dependent, browser-opening). It
 is verified by live `curl` against `demo.datasafe.dev` + end-to-end

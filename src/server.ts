@@ -35,18 +35,26 @@ const { version } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 );
 
-export function buildServer (): McpServer {
+// http: the remote transport, where the user signs in through OAuth before the first call, so there is no connect.
+const PRIVACY_DISCLOSURE = 'Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).';
+
+export function buildServer ({ http = false }: { http?: boolean } = {}): McpServer {
   const server = new McpServer({
     name: 'hds-mcp',
     version
+  }, {
+    instructions: 'Health Data Safe (HDS) account tools. ' + PRIVACY_DISCLOSURE +
+      ' Always look data up in the HDS data model (search_items, get_item) before writing it.'
   });
 
-  server.tool(
-    'connect',
-    'Connect to an HDS / Pryv account via OAuth. Opens your browser to sign in. Demo by default. For an import, pass roots (only the root streams it writes, from list_model_streams) and importName (its own app access, so every event names the import and it can be removed later); tell the user which kinds of data and which level the access covers before signing in. Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).',
-    connectInput,
-    wrap(connectHandler)
-  );
+  if (!http) {
+    server.tool(
+      'connect',
+      'Connect to an HDS / Pryv account via OAuth. Opens your browser to sign in. Demo by default. For an import, pass roots (only the root streams it writes, from list_model_streams) and importName (its own app access, so every event names the import and it can be removed later); tell the user which kinds of data and which level the access covers before signing in. ' + PRIVACY_DISCLOSURE,
+      connectInput,
+      wrap(connectHandler)
+    );
+  }
 
   server.tool(
     'list_streams',
