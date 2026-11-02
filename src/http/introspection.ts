@@ -12,6 +12,8 @@ export interface IntrospectionConfig {
   // This MCP's public URL: a token whose `aud` names another resource is refused.
   resourceUrl: URL;
   serviceInfoUrl: string;
+  // Refuse a token that carries no `aud` (once the core binds tokens to this resource).
+  requireAudience?: boolean;
   cacheMs?: number;
   fetchFn?: typeof fetch;
 }
@@ -59,6 +61,7 @@ export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVeri
       }
       const body = await res.json() as IntrospectionResponse;
       if (!body.active) throw new InvalidTokenError('Token is not active');
+      if (cfg.requireAudience && body.aud == null) throw new InvalidTokenError('Token was not issued for this MCP server');
       if (!audienceMatches(body.aud, cfg.resourceUrl)) throw new InvalidTokenError('Token was not issued for this MCP server');
       if (!body.api_base) throw new InvalidTokenError('Token carries no API base');
       const api = new URL(body.api_base);

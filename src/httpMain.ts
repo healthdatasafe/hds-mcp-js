@@ -30,13 +30,18 @@ const app = createHttpApp({
   publicUrl,
   oauthMetadata,
   observability: obs ? { obs, methods } : null,
+  // e.g. "claude=hds-mcp-claude,chatgpt=hds-mcp-chatgpt,claude-code=hds-mcp-claude-code"
+  connectorClients: Object.fromEntries((process.env.HDS_MCP_CONNECTOR_CLIENTS ?? '').split(',')
+    .map((p) => p.split('=').map((s) => s.trim())).filter((kv) => kv.length === 2 && kv[0] && kv[1])),
   allowedOrigins: (process.env.HDS_MCP_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   verifier: introspectionVerifier({
     introspectionEndpoint: oauthMetadata.introspection_endpoint,
     clientId: required('HDS_MCP_INTROSPECT_CLIENT_ID'),
     clientSecret: required('HDS_MCP_INTROSPECT_CLIENT_SECRET'),
     resourceUrl: publicUrl,
-    serviceInfoUrl
+    serviceInfoUrl,
+    // Set once the core echoes `aud` (rc.70, plan 115 item 1) and the connector rows carry --audience.
+    requireAudience: process.env.HDS_MCP_REQUIRE_AUDIENCE === 'true'
   })
 });
 const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}`));

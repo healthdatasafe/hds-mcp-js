@@ -186,6 +186,12 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   introspection returns. The MCP spec forbids this passthrough; a separate credential through token exchange is a
   gate before production, and production `api_base` hosts are refused until then.
 - One MCP per core: issuers are per core, and clients follow only the first `authorization_servers` entry.
+- **Discovery.** `GET /manifest.json` is the Pryv adapter manifest (`type: "mcp"`, `mcpEndpoint`,
+  `authorizationServer`, connector `clients` from `HDS_MCP_CONNECTOR_CLIENTS="claude=…,chatgpt=…"`), public and
+  CORS-open. A core lists this server's base URL in `/service/info` `adapters`; the account app reads the manifest to
+  show the user their URL. Gated: nothing lists it until CIMD (perki).
+- `HDS_MCP_REQUIRE_AUDIENCE=true` refuses tokens without `aud` (switch on with rc.70 + `--audience` rows).
+- Not offered over HTTP: `connect` (OAuth signs in) and `ensure_streams` (no grant carries `manage`).
 
 **Deploy.** CI-built image `ghcr.io/healthdatasafe/hds-mcp-js` (built on a `vX.Y.Z` tag by
 `.github/workflows/build-image.yml`, deployed with `infra/dev-deploy/dokku/deploy-image.sh`), running

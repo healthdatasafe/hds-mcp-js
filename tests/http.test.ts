@@ -28,6 +28,7 @@ before(async () => {
     publicUrl: new URL('http://127.0.0.1/mcp'),
     oauthMetadata: { issuer: 'https://issuer.test', authorization_endpoint: 'https://issuer.test/a', token_endpoint: 'https://issuer.test/t', response_types_supported: ['code'] },
     allowedOrigins: ['https://allowed.example'],
+    connectorClients: { claude: 'hds-mcp-claude' },
     verifier: {
       async verifyAccessToken (token: string) {
         if (!users[token]) throw new InvalidTokenError('Token is not active');
@@ -98,6 +99,25 @@ test('concurrent users each reach the API with their own token', async () => {
 test('a foreign Origin is refused, an allowed one passes', async () => {
   assert.equal((await rpc('tok-alice', { jsonrpc: '2.0', id: 1, method: 'tools/list' }, { origin: 'https://evil.example' })).status, 403);
   assert.equal((await rpc('tok-alice', { jsonrpc: '2.0', id: 1, method: 'tools/list' }, { origin: 'https://allowed.example' })).status, 200);
+});
+
+test('adapter manifest: public, CORS-readable from any origin, names the endpoint, issuer and clients', async () => {
+  const res = await fetch(mcpUrl.replace('/mcp', '/manifest.json'), { headers: { origin: 'https://evil.example' } });
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('access-control-allow-origin'), '*');
+  const m = (await res.json()) as Record<string, unknown>;
+  assert.equal(m.type, 'mcp');
+  assert.equal(m.name, 'hds-mcp');
+  assert.equal(m.mcpEndpoint, 'http://127.0.0.1/mcp');
+  assert.equal(m.authorizationServer, 'https://issuer.test');
+  assert.deepEqual(m.clients, { claude: 'hds-mcp-claude' });
+  assert.ok(typeof m.version === 'string');
+});
+
+test('tools/list over HTTP has no ensure_streams (OAuth grants never carry manage)', async () => {
+  const res = await rpc('tok-alice', { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+  const names = ((await res.json()) as { result: { tools: Array<{ name: string }> } }).result.tools.map((t) => t.name);
+  assert.ok(!names.includes('ensure_streams'));
 });
 
 test('GET on the MCP path: 405', async () => {
@@ -172,4 +192,23 @@ test('introspectionVerifier: active token → credentials at api_base; prod, ina
   await assert.rejects(v.verifyAccessToken('prod'), /not available for production/);
   await assert.rejects(v.verifyAccessToken('dead'), /not active/);
   await assert.rejects(v.verifyAccessToken('other'), /not issued for this MCP/);
+});
+
+test('introspectionVerifier: requireAudience refuses a token without aud, accepts the right one', async () => {
+  const answers: Record<string, unknown> = {
+    noaud: { active: true, api_base: 'https://alice.demo.datasafe.dev/' },
+    right: { active: true, api_base: 'https://alice.demo.datasafe.dev/', aud: ['https://mcp.demo.datasafe.dev/mcp'] }
+  };
+  const v = introspectionVerifier({
+    introspectionEndpoint: 'https://issuer.test/oauth2/introspect',
+    clientId: 'mcp',
+    clientSecret: 's',
+    resourceUrl: new URL('https://mcp.demo.datasafe.dev/mcp'),
+    serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info',
+    requireAudience: true,
+    fetchFn: (async (_u: unknown, init: { body: string }) =>
+      new Response(JSON.stringify(answers[new URLSearchParams(init.body).get('token')!]), { status: 200 })) as unknown as typeof fetch
+  });
+  await assert.rejects(v.verifyAccessToken('noaud'), /not issued for this MCP/);
+  assert.ok(await v.verifyAccessToken('right'));
 });

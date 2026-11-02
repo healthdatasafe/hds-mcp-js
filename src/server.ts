@@ -84,12 +84,15 @@ export function buildServer ({ http = false }: { http?: boolean } = {}): McpServ
     wrap(importBatchHandler)
   );
 
-  server.tool(
-    'ensure_streams',
-    'Create the streams the given HDS items need in the connected account, with their data-model names, parents first (call before writing to items whose streams may not exist yet). Needs manage on the root. Refuses on production until the production-write gate is opened.',
-    ensureStreamsInput,
-    wrap(ensureStreamsHandler)
-  );
+  // Not over HTTP: OAuth grants never carry manage, so stream creation is always refused there.
+  if (!http) {
+    server.tool(
+      'ensure_streams',
+      'Create the streams the given HDS items need in the connected account, with their data-model names, parents first (call before writing to items whose streams may not exist yet). Needs manage on the root. Refuses on production until the production-write gate is opened.',
+      ensureStreamsInput,
+      wrap(ensureStreamsHandler)
+    );
+  }
 
   server.tool(
     'update_event',

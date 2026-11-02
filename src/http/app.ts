@@ -16,6 +16,29 @@ export interface HttpAppConfig {
   allowedOrigins: string[];
   /** Aggregate telemetry (hds-observability-js); omitted or null when disabled. */
   observability?: { obs: HttpObservability, methods: readonly string[] } | null;
+  /** Public OAuth client ids registered at the core for each connector product, shown in the manifest. */
+  connectorClients?: Record<string, string>;
+}
+
+/**
+ * Pryv adapter manifest (adapter contract §3): the core lists this server's base URL in /service/info `adapters`,
+ * and clients (e.g. the account app's "use HDS with your AI assistant" page) read the details here.
+ */
+export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMetadata' | 'connectorClients'>) {
+  return {
+    name: packageName,
+    type: 'mcp',
+    version,
+    title: 'Health Data Safe for AI assistants',
+    description: 'Model Context Protocol server: lets an AI assistant read (and, where granted, add to) a Health Data Safe account, after the person signs in and consents on HDS.',
+    useCases: ['read-health-data', 'search-data-model', 'search-datasets', 'write-health-data'],
+    auth: ['oauth2'],
+    standards: ['MCP', 'RFC8414', 'RFC9728', 'RFC7636'],
+    mcpEndpoint: cfg.publicUrl.href,
+    protectedResourceMetadata: getOAuthProtectedResourceMetadataUrl(cfg.publicUrl),
+    authorizationServer: cfg.oauthMetadata.issuer,
+    clients: cfg.connectorClients ?? {}
+  };
 }
 
 /** DNS-rebinding guard (MCP spec): a request carrying an Origin must come from an allowed one. */
@@ -37,6 +60,11 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
   // Liveness for the Dokku deploy healthcheck and deploy-image.sh (which reads `version`). No auth, no dependency.
   app.get('/status', (_req: Request, res: Response) => {
     res.json({ status: 'ok', name: packageName, version });
+  });
+  // Public, no credentials: readable from any origin (the account app fetches it cross-origin).
+  const manifest = adapterManifest(cfg);
+  app.get('/manifest.json', (_req: Request, res: Response) => {
+    res.set('Access-Control-Allow-Origin', '*').json(manifest);
   });
   app.use(originCheck(cfg.allowedOrigins));
   app.use(mcpAuthMetadataRouter({

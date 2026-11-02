@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+Discovery groundwork and tighter remote surface (plan 118).
+
+### Added
+- `GET /manifest.json` on `hds-mcp-http`: a Pryv adapter manifest (adapter contract §3: `name`, `type: "mcp"`,
+  `version`, plus `mcpEndpoint`, `protectedResourceMetadata`, `authorizationServer` and the public connector
+  `clients` ids from `HDS_MCP_CONNECTOR_CLIENTS`). Public, readable from any origin, so a core can list this server
+  in `/service/info` `adapters` and the account app can read the URL for the user's core. Nothing lists it yet.
+- `HDS_MCP_REQUIRE_AUDIENCE=true`: refuse tokens whose introspection carries no `aud`. Turn it on once the core
+  echoes `aud` (rc.70) and the connector rows carry `--audience`.
+
+### Changed
+- `ensure_streams` is no longer offered over HTTP: OAuth grants never carry `manage`, so it could only fail there.
+
 ## [0.6.0] - 2026-11-02
 
 CI-built image for the remote transport (plan 118, plan 102 procedure), deployed on demo at `demo-mcp.datasafe.dev`.

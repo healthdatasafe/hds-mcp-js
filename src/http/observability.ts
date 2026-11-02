@@ -48,6 +48,7 @@ export function httpMethods (mcpPath: string): string[] {
   return [
     `POST ${mcpPath}`, `GET ${mcpPath}`, `DELETE ${mcpPath}`,
     'GET /status',
+    'GET /manifest.json',
     `GET /.well-known/oauth-protected-resource${rs}`,
     'GET /.well-known/oauth-authorization-server'
   ];
