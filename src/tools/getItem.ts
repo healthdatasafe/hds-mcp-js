@@ -4,7 +4,7 @@ import { itemEventTypes, contentSchema, packLabel } from '../dataModel/eventType
 
 export const getItemInput = {
   key: z.string().min(1).describe(
-    'The HDS item key, e.g. "body-weight", "fertility-bbt", "body-vulva-bleeding". ' +
+    'The HDS item key, e.g. "body-weight", "body-temperature-basal", "body-vulva-bleeding". ' +
     'Use search_items to discover keys.'
   )
 };

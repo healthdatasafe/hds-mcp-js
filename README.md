@@ -105,7 +105,7 @@ That's it. The connection lasts until you quit Claude Desktop.
 
 ## What the tools do
 
-The MCP exposes eleven tools to your agent. **You don't call them directly —**
+The MCP exposes fourteen tools to your agent. **You don't call them directly —**
 you just ask your agent in plain language. The agent picks the right tool.
 
 | Tool | What it does | Plain-language prompt |
@@ -121,6 +121,9 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `search_dataset` | Find a coded entry (diagnosis, drug, treatment) to record | *"Find the code for endometriosis."* |
 | `create_event` | Write a single event into a stream | *"Log my weight as 72 kg right now."* |
 | `import_batch` | Write up to 500 events in one call | *"Import every row of this CSV as a temperature event."* |
+| `ensure_streams` | Create the data containers an item needs before writing | *(the agent does this itself before an import)* |
+| `update_event` | Fix one event in place | *"That weight should be 71.9, not 71.5."* |
+| `delete_events` | Remove events, or everything one import wrote; shows the list first | *"Remove everything the health-files import wrote."* |
 
 ---
 
@@ -179,7 +182,11 @@ next session starts back in the safe state.
 
 ## Roadmap
 
-- **v0.3.0 (current)**: data model and datasets read tools:
+- **v0.4.0 (current)**: imports done safely: `connect` can ask for only
+  the kinds of data an import needs, under the import's own name; read
+  back, fix (`update_event`) or remove (`delete_events`, with a preview)
+  everything an import wrote.
+- **v0.3.0**: data model and datasets read tools:
   `search_items` finds items by LOINC / SNOMED-CT code and by French
   label; new `get_event_type`, `list_model_streams`, `list_datasources`,
   `search_dataset`.
@@ -245,6 +252,7 @@ tests/
   hostPolicy.test.ts   # pins demo-default + prod-write gate
   eventTypes.test.ts   # eventType resolution + content validation + refusal wording
   codes.test.ts        # code extraction, code + locale search
+  phase2.test.ts       # read-back filters, delete order, model paths
 ```
 
 License: BSD-3-Clause.

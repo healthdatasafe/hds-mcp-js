@@ -51,16 +51,19 @@ planning issues — see [healthdatasafe/_macro#23](https://github.com/healthdata
 
 ---
 
-## Tool catalogue (v0.3.0, tier=essential)
+## Tool catalogue (v0.4.0, tier=essential)
 
-All eleven tools are tagged `essential` and exposed by default. The
+All fourteen tools are tagged `essential` and exposed by default. The
 `extended` and `advanced` tiers are reserved for the v0.5 auto-gen pass.
 
 | Tool                  | Purpose                                                                 | Notable behaviour                                                                                                                                                                                                                                                                                                                  |
 |-----------------------|-------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **`connect`**         | OAuth (Pryv poll-mode) — opens browser, polls until accept              | Defaults: `host: "demo"`, `level: "contribute"`, scope **all streams** (`streamId: "*"` — per-stream scoping not yet supported). Other levels: `read`, `manage`. `enableWrites: true` (only with `host: "prod"`, only on the user's explicit ask) unlocks prod writes for the session. Returns `apiEndpoint` (held in-memory in [`auth/session.ts`](src/auth/session.ts)). |
+| **`connect`**         | OAuth (Pryv poll-mode) — opens browser, polls until accept              | Defaults: `host: "demo"`, `level: "contribute"`, scope **all streams** (`streamId: "*"`). `roots: [{ streamId, level? }]` scopes the access to those roots (default level `manage`, `defaultName` from the pack, `*` refused); `importName` signs in as its own app access `hds-mcp-<importName>` (llms-full §5f.2-3). Other levels: `read`, `manage`. `enableWrites: true` (only with `host: "prod"`, only on the user's explicit ask) unlocks prod writes for the session. Returns `apiEndpoint` (held in-memory in [`auth/session.ts`](src/auth/session.ts)). |
 | **`list_streams`**    | List the user's stream tree                                             | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
-| **`get_events`**      | Query events, filtered by stream / type / time range                    | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
+| **`get_events`**      | Query events, filtered by stream / type / time range                    | Reads always allowed on demo + prod. Batch `events.get`, so `state`, `skip` and clientData conditions pass through: `sourceKeyPrefix` (`{ path: 'sourceKey', prefix }`), `relatedTo` (`{ path: 'related.<id>', exists: true }`); a clientData filter without times searches 1900-2100.                                                                                                                                                                                                                                                                                               |
+| **`ensure_streams`**  | Create the model streams given items need, parents first                | Gated on prod. Reads `streams.get` (state all), creates only the missing ones with data-model names.                                                                                                                                                                                                                             |
+| **`update_event`**    | Change one event in place                                               | Gated on prod. Validates content against the (new or current) type via `events.getOne` first. `clientData` is replaced whole.                                                                                                                                                                                                    |
+| **`delete_events`**   | Delete by ids or by `sourceKeyPrefix`                                   | Gated on prod. Dry run unless `confirm: true`; citing events (those with `clientData.related` to another in the set) go before their sources; first delete trashes, second deletes for good.                                                                                                                                      |
 | **`search_items`**    | Search the HDS data-model catalogue                                     | Backed by [`dataModel/pack.ts`](src/dataModel/pack.ts) which fetches + caches `model.datasafe.dev/pack.json`. Scoring in [`tools/searchItems.ts`](src/tools/searchItems.ts) — exact-key match > exact code match (LOINC / SNOMED-CT / ICD-10 / ICF from `references`, per-unit `loinc`, `fhir.code` / `alsoMatch`: [`dataModel/codes.ts`](src/dataModel/codes.ts)) > exact-label match (any locale) > substring matches. `lang` picks the label language; deprecated items hidden unless `includeDeprecated`.                                                                                              |
 | **`get_item`**        | Get one HDS item's full definition by key                               | Pulls from the same cached pack. Returns localised label/description, `streamId`, `eventType` (or `variations.eventType.options[]`), `type`, the content schema of each eventType and the data-model version (resolution in [`dataModel/eventTypes.ts`](src/dataModel/eventTypes.ts)).                                                                                                                                                                                       |
 | **`get_event_type`**  | One eventType: content schema, unit name, attachment flag, items using it | Pack only, no account needed.                                                                                                                                                                                                                                                                                                    |
@@ -133,6 +136,11 @@ If no item matches, surface that to the user — the MCP does not invent.
 | `search_dataset`: unknown datasource          | ``No datasource "X" in data-model <version>. Available: <keys>.``                        |
 | `search_dataset`: text too short              | ``Search text too short for "X": at least N characters.``                                |
 | `search_dataset`: service error               | ``Dataset search failed: <upstream message>``                                            |
+| `connect`: `*` in roots                       | ``roots must name streams; omit roots to request all data.``                             |
+| `update_event`: invalid content               | ``Update refused, nothing written: <problems>``                                          |
+| `update_event`: empty update                  | ``Nothing to update.``                                                                   |
+| `delete_events`: no target                    | ``Give ids or a sourceKeyPrefix.``                                                       |
+| `ensure_streams`: item stream not in model    | ``Stream "X" of item "Y" is not in the data-model stream tree.``                         |
 
 Pryv backend status codes propagate through these wrappers; the
 underlying error body shape is
@@ -188,6 +196,7 @@ tests/
   hostPolicy.test.ts   # pins demo-default + prod-write gate
   eventTypes.test.ts   # eventType resolution, validation, refusal wording
   codes.test.ts        # code extraction (all pack shapes), code + locale search, endpoint resolution
+  phase2.test.ts       # events.get params (clientData filters, paging), delete order, model paths
 ```
 
 Auth flow is not unit-tested (network-dependent, browser-opening). It

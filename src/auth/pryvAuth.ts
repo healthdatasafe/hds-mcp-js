@@ -1,7 +1,7 @@
 import open from 'open';
 import { safeLog } from '../lib/scrubber.ts';
 
-const APP_ID = 'hds-mcp';
+export const APP_ID = 'hds-mcp';
 const POLL_INTERVAL_MS_DEFAULT = 1000;
 const POLL_TIMEOUT_MS = 5 * 60 * 1000;
 
@@ -41,7 +41,8 @@ export async function fetchServiceInfo (serviceInfoUrl: string): Promise<Service
 
 export async function runAuthFlow (
   serviceInfoUrl: string,
-  requestedPermissions: RequestedPermission[]
+  requestedPermissions: RequestedPermission[],
+  requestingAppId: string = APP_ID
 ): Promise<{ apiEndpoint: string; username: string }> {
   const info = await fetchServiceInfo(serviceInfoUrl);
 
@@ -52,7 +53,7 @@ export async function runAuthFlow (
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      requestingAppId: APP_ID,
+      requestingAppId,
       requestedPermissions,
       languageCode: 'en',
       returnURL: 'self'

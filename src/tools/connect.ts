@@ -1,7 +1,10 @@
 import { z } from 'zod';
 import { resolveServiceInfoUrl } from '../lib/hostPolicy.ts';
 import { setApiEndpoint } from '../auth/session.ts';
-import { runAuthFlow, type RequestedPermission } from '../auth/pryvAuth.ts';
+import { runAuthFlow, APP_ID, type RequestedPermission } from '../auth/pryvAuth.ts';
+import { loadPack, localized } from '../dataModel/pack.ts';
+
+type Level = 'read' | 'contribute' | 'manage';
 
 export const connectInput = {
   host: z.string().optional().describe(
@@ -10,7 +13,8 @@ export const connectInput = {
   ),
   level: z.enum(['read', 'contribute', 'manage']).optional().describe(
     "Permission level requested. 'contribute' (default — read+write events; covers create_event / import_batch / the pilot scenario), " +
-    "'read' (read-only), or 'manage' (also stream config). Pick 'read' only when the user explicitly asks for a read-only session."
+    "'read' (read-only), or 'manage' (also stream config). Pick 'read' only when the user explicitly asks for a read-only session. " +
+    'With roots, the default level per root is manage (an import creates item streams under its roots).'
   ),
   enableWrites: z.boolean().optional().describe(
     'Unlock create_event / import_batch on the PRODUCTION host for this session. ' +
@@ -18,27 +22,68 @@ export const connectInput = {
     'Pass true ONLY when the user explicitly asked to write to their real production account — ' +
     'never set it on your own initiative. The user still reviews and accepts the permission ' +
     'request on the sign-in consent screen.'
+  ),
+  roots: z.array(z.object({
+    streamId: z.string().min(1),
+    level: z.enum(['read', 'contribute', 'manage']).optional()
+  })).min(1).optional().describe(
+    'Request access to exactly these root streams (see list_model_streams) instead of all data. ' +
+    'Required for an import: list only the roots it writes or reads. Missing roots are created at sign-in ' +
+    'with their data-model name. Before calling, tell the user in plain words which kinds of data the ' +
+    'access covers (the root names) and the level.'
+  ),
+  importName: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional().describe(
+    'For an import: a stable lowercase name (letters, digits, dashes), the same one used as the <tool> part of ' +
+    'every clientData.sourceKey. The session then signs in as its own app access "hds-mcp-<importName>", so every ' +
+    'event it writes names the import as its author, and the import can be found and removed later.'
   )
 };
 
 export async function connectHandler (
-  { host, level, enableWrites }: { host?: string; level?: 'read' | 'contribute' | 'manage'; enableWrites?: boolean }
+  { host, level, enableWrites, roots, importName }: {
+    host?: string;
+    level?: Level;
+    enableWrites?: boolean;
+    roots?: Array<{ streamId: string; level?: Level }>;
+    importName?: string;
+  }
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const serviceInfoUrl = resolveServiceInfoUrl(host);
-  const permissions: RequestedPermission[] = [{
-    streamId: '*',
-    level: level ?? 'contribute',
-    defaultName: 'All HDS data'
-  }];
-  const { apiEndpoint, username } = await runAuthFlow(serviceInfoUrl, permissions);
+  const permissions = roots ? await rootPermissions(roots, level) : allDataPermission(level);
+  const appId = importName ? `${APP_ID}-${importName}` : APP_ID;
+  const { apiEndpoint, username } = await runAuthFlow(serviceInfoUrl, permissions, appId);
   setApiEndpoint(apiEndpoint, enableWrites === true, serviceInfoUrl);
   const prodWriteNote = enableWrites === true
     ? ' Production writes: enabled for this session.'
     : '';
+  const scope = permissions.map((p) => `${p.defaultName ?? p.streamId} (${p.level})`).join(', ');
   return {
     content: [{
       type: 'text',
-      text: `Connected as ${username} (${new URL(apiEndpoint).hostname}). Permission level: ${permissions[0].level}.${prodWriteNote}`
+      text: `Connected as ${username} (${new URL(apiEndpoint).hostname}) with app access "${appId}". ` +
+        `Access: ${scope}.${prodWriteNote}`
     }]
   };
+}
+
+function allDataPermission (level?: Level): RequestedPermission[] {
+  return [{ streamId: '*', level: level ?? 'contribute', defaultName: 'All HDS data' }];
+}
+
+/** Per-root permissions, named from the data model so the consent screen and the account show plain names. */
+export async function rootPermissions (
+  roots: Array<{ streamId: string; level?: Level }>,
+  level?: Level
+): Promise<RequestedPermission[]> {
+  if (roots.some((r) => r.streamId === '*')) {
+    throw new Error('roots must name streams; omit roots to request all data.');
+  }
+  const pack = await loadPack();
+  const modelRoots = new Map(((pack.streams ?? []) as Array<{ id: string; name?: string; label?: Record<string, string> }>)
+    .map((s) => [s.id, s.label ? localized(s.label, 'en') : s.name]));
+  return roots.map((r) => ({
+    streamId: r.streamId,
+    level: r.level ?? level ?? 'manage',
+    defaultName: modelRoots.get(r.streamId) ?? r.streamId
+  }));
 }

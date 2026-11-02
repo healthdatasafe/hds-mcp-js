@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-02
+
+Scoped access and read-back for imports (site-agents#36 A3, A6; plan 118 phase 2), following the import contract of
+`llms-full.txt` §5f.
+
+### Added
+- `connect` takes `roots` (only the root streams an import needs, each with a level, default `manage`, named from the
+  data model so the consent screen shows plain names; no `*`) and `importName` (the session signs in as its own app
+  access `hds-mcp-<importName>`, so every event names the import as its author).
+- `get_events`: `state` (`all` shows trashed events, which a re-run must leave trashed), `sourceKeyPrefix` and
+  `relatedTo` clientData filters (whole 1900-2100 range by default when filtering), `skip` paging with a
+  "more may exist" hint.
+- `ensure_streams`: creates the streams the given items need, parents first, with their data-model names.
+- `update_event`: changes one event in place; content is validated against its type first.
+- `delete_events`: by ids or by `sourceKeyPrefix`; a dry run listing what would go unless `confirm: true`; deletes
+  citing events before their sources; a second delete removes trashed events for good.
+
+### Fixed
+- `get_item` description cited a non-existent example key (`fertility-bbt`); now `body-temperature-basal`.
+
 ## [0.3.0] - 2026-11-02
 
 Data model and datasets read tools (site-agents#36 A7 in part).

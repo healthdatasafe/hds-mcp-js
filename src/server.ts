@@ -11,6 +11,9 @@ import { getEventTypeInput, getEventTypeHandler } from './tools/getEventType.ts'
 import { listModelStreamsInput, listModelStreamsHandler } from './tools/listModelStreams.ts';
 import { listDatasourcesInput, listDatasourcesHandler } from './tools/listDatasources.ts';
 import { searchDatasetInput, searchDatasetHandler } from './tools/searchDataset.ts';
+import { ensureStreamsInput, ensureStreamsHandler } from './tools/ensureStreams.ts';
+import { updateEventInput, updateEventHandler } from './tools/updateEvent.ts';
+import { deleteEventsInput, deleteEventsHandler } from './tools/deleteEvents.ts';
 import { scrubError } from './lib/scrubber.ts';
 
 function wrap<T> (handler: (a: T) => Promise<any>) {
@@ -40,7 +43,7 @@ export function buildServer (): McpServer {
 
   server.tool(
     'connect',
-    'Connect to an HDS / Pryv account via OAuth. Opens your browser to sign in. Demo by default. Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).',
+    'Connect to an HDS / Pryv account via OAuth. Opens your browser to sign in. Demo by default. For an import, pass roots (only the root streams it writes, from list_model_streams) and importName (its own app access, so every event names the import and it can be removed later); tell the user which kinds of data and which level the access covers before signing in. Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).',
     connectInput,
     wrap(connectHandler)
   );
@@ -54,7 +57,7 @@ export function buildServer (): McpServer {
 
   server.tool(
     'get_events',
-    'Get events (data points) from the connected HDS account, optionally filtered by stream, type, or time range.',
+    'Get events (data points) from the connected HDS account, optionally filtered by stream, type, time range, clientData.sourceKey prefix (everything one import wrote) or the event they cite (relatedTo). state: \'all\' includes trashed events, which a re-run must see and leave trashed. Pages with limit + skip.',
     getEventsInput,
     wrap(getEventsHandler)
   );
@@ -71,6 +74,27 @@ export function buildServer (): McpServer {
     'Import many events at once (1–500 per call). Always call search_items first to find the canonical HDS item for each data type, then get_item for its spec, and use those streamId + eventType values. If no item matches for some data, ask the user before inventing a type. Every event is checked against its eventType content schema first; if any fails, the whole batch is refused and nothing is written. Returns the created event ids in input order, so later events can reference earlier ones. Refuses on production until the production-write gate is opened.',
     importBatchInput,
     wrap(importBatchHandler)
+  );
+
+  server.tool(
+    'ensure_streams',
+    'Create the streams the given HDS items need in the connected account, with their data-model names, parents first (call before writing to items whose streams may not exist yet). Needs manage on the root. Refuses on production until the production-write gate is opened.',
+    ensureStreamsInput,
+    wrap(ensureStreamsHandler)
+  );
+
+  server.tool(
+    'update_event',
+    'Change one event in place (content, time, description, clientData, …), e.g. when an import runs again and a record changed: find it by clientData.sourceKey with get_events. Content is checked against the event type first. clientData is replaced whole: keep sourceKey. Never update a trashed event: the user removed it. Refuses on production until the production-write gate is opened.',
+    updateEventInput,
+    wrap(updateEventHandler)
+  );
+
+  server.tool(
+    'delete_events',
+    'Delete events by id, or everything one import wrote by clientData.sourceKey prefix. Without confirm: true it is a dry run that lists what would go: show the list to the user and only confirm after they agree. Deletes citing events before their sources. A first delete moves events to the trash; deleting trashed events removes them for good. Refuses on production until the production-write gate is opened.',
+    deleteEventsInput,
+    wrap(deleteEventsHandler)
   );
 
   server.tool(
