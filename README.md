@@ -105,7 +105,7 @@ That's it. The connection lasts until you quit Claude Desktop.
 
 ## What the tools do
 
-The MCP exposes seven tools to your agent. **You don't call them directly —**
+The MCP exposes eleven tools to your agent. **You don't call them directly —**
 you just ask your agent in plain language. The agent picks the right tool.
 
 | Tool | What it does | Plain-language prompt |
@@ -115,6 +115,10 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `get_events` | Read events (data points) — filterable by stream / type / time | *"Get my last week of body events."* |
 | `search_items` | Search the HDS data-model for the right item to log | *"What HDS item should I use for basal body temperature?"* |
 | `get_item` | Get the full definition of one HDS item by key | *"Show me the spec for body-weight."* |
+| `get_event_type` | Show what one event type accepts (its content schema) | *"What does a coded lab result look like?"* |
+| `list_model_streams` | Browse the data model's categories and their items | *"What can HDS store about fertility?"* |
+| `list_datasources` | List the coded lists HDS offers (conditions, medications, …) | *"Which coded lists does HDS have?"* |
+| `search_dataset` | Find a coded entry (diagnosis, drug, treatment) to record | *"Find the code for endometriosis."* |
 | `create_event` | Write a single event into a stream | *"Log my weight as 72 kg right now."* |
 | `import_batch` | Write up to 500 events in one call | *"Import every row of this CSV as a temperature event."* |
 
@@ -147,6 +151,8 @@ next session starts back in the safe state.
   the MCP cannot change that. For medical records, a provider that does not
   train on your data, or a model on your own computer, is the safer choice.
   The agent is told to say this before reading anything.
+- `search_dataset` sends its search text (for example a condition or drug
+  name) to the HDS datasets service of the platform you use.
 - Your sign-in token is held in memory only and is gone when Claude Desktop
   quits.
 - The MCP scrubs your token from any log line or error message before
@@ -173,7 +179,11 @@ next session starts back in the safe state.
 
 ## Roadmap
 
-- **v0.2.0 (current)**: the write tools take `description` and
+- **v0.3.0 (current)**: data model and datasets read tools:
+  `search_items` finds items by LOINC / SNOMED-CT code and by French
+  label; new `get_event_type`, `list_model_streams`, `list_datasources`,
+  `search_dataset`.
+- **v0.2.0**: the write tools take `description` and
   `clientData`, check content against the data model before writing, and
   return the created ids in order; `get_item` shows content schemas;
   `search_items` no longer crashes on items with a unit choice.
@@ -224,6 +234,8 @@ src/
   dataModel/
     pack.ts            # fetches + caches model.datasafe.dev/pack.json
     eventTypes.ts      # item eventTypes, content schemas, validation before writing
+    codes.ts           # terminology codes per item (search by code)
+    datasources.ts     # dataset endpoints via service-info assets
   lib/
     scrubber.ts        # centralized token redactor (mandatory on every log/error)
     hostPolicy.ts      # demo-default; prod-write gate (session opt-in or env override)
@@ -232,6 +244,7 @@ tests/
   scrubber.test.ts     # pins the redactor contract
   hostPolicy.test.ts   # pins demo-default + prod-write gate
   eventTypes.test.ts   # eventType resolution + content validation + refusal wording
+  codes.test.ts        # code extraction, code + locale search
 ```
 
 License: BSD-3-Clause.

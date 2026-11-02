@@ -14,7 +14,7 @@ export interface ItemDef {
   unit?: string;
   scale?: unknown;
   options?: unknown;
-  variations?: { eventType?: { options?: Array<{ value?: string }> } };
+  variations?: { eventType?: { options?: Array<{ value?: string; loinc?: string }> } };
   [k: string]: unknown;
 }
 
@@ -24,6 +24,7 @@ export interface DataModelPack {
   items: Record<string, ItemDef>;
   streams?: any;
   eventTypes?: any;
+  datasources?: any;
   conversions?: any;
 }
 
@@ -50,6 +51,11 @@ export async function loadPack (url?: string): Promise<DataModelPack> {
 }
 
 export function en (loc: Record<string, string> | undefined): string {
+  return localized(loc, 'en');
+}
+
+/** The text in `lang`, falling back to English, then to any locale. */
+export function localized (loc: Record<string, string> | undefined, lang: string): string {
   if (!loc) return '';
-  return loc.en ?? Object.values(loc)[0] ?? '';
+  return loc[lang] ?? loc.en ?? Object.values(loc)[0] ?? '';
 }

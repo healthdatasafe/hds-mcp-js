@@ -7,6 +7,10 @@ import { createEventInput, createEventHandler } from './tools/createEvent.ts';
 import { importBatchInput, importBatchHandler } from './tools/importBatch.ts';
 import { searchItemsInput, searchItemsHandler } from './tools/searchItems.ts';
 import { getItemInput, getItemHandler } from './tools/getItem.ts';
+import { getEventTypeInput, getEventTypeHandler } from './tools/getEventType.ts';
+import { listModelStreamsInput, listModelStreamsHandler } from './tools/listModelStreams.ts';
+import { listDatasourcesInput, listDatasourcesHandler } from './tools/listDatasources.ts';
+import { searchDatasetInput, searchDatasetHandler } from './tools/searchDataset.ts';
 import { scrubError } from './lib/scrubber.ts';
 
 function wrap<T> (handler: (a: T) => Promise<any>) {
@@ -71,7 +75,7 @@ export function buildServer (): McpServer {
 
   server.tool(
     'search_items',
-    'Search the HDS data-model for items (the canonical, human-meaningful unit: a streamId + eventType + content shape). Use this BEFORE create_event or import_batch to find the right item. If a search returns no match for the user\'s data, surface that to the user — do not fall back to inventing types.',
+    'Search the HDS data-model for items (the canonical, human-meaningful unit: a streamId + eventType + content shape). Use this BEFORE create_event or import_batch to find the right item. Searches labels in every language the model has (English, French), and terminology codes: a LOINC or SNOMED-CT code finds the item that owns it (use the item, not a generic lab result, when one does). Deprecated items are hidden unless asked for. If a search returns no match for the user\'s data, surface that to the user — do not fall back to inventing types.',
     searchItemsInput,
     wrap(searchItemsHandler)
   );
@@ -81,6 +85,34 @@ export function buildServer (): McpServer {
     'Get the full definition of a single HDS item by key (e.g. "body-weight"). Call this after search_items to read the spec before writing events. Returns the canonical streamId, eventType (or the unit choices), scale/unit/options if any, the content schema of each eventType, and the data-model version.',
     getItemInput,
     wrap(getItemHandler)
+  );
+
+  server.tool(
+    'get_event_type',
+    'Get one HDS event type: its content schema (what create_event / import_batch accept), the unit name for measurement types, whether it needs an attachment, and the items that use it. Reads the data model only; no account needed.',
+    getEventTypeInput,
+    wrap(getEventTypeHandler)
+  );
+
+  server.tool(
+    'list_model_streams',
+    'Browse the stream tree of the HDS data model: the root streams (the consent units apps ask access to) or the children of one stream, with the items each holds. This is the model, not the user\'s account: use list_streams for the account. No account needed.',
+    listModelStreamsInput,
+    wrap(listModelStreamsHandler)
+  );
+
+  server.tool(
+    'list_datasources',
+    'List the HDS datasets (curated, coded lists: conditions, findings, medications, procedures, treatments) and the items that take a value from each. Use search_dataset to look up an entry. No account needed.',
+    listDatasourcesInput,
+    wrap(listDatasourcesHandler)
+  );
+
+  server.tool(
+    'search_dataset',
+    'Search an HDS dataset (from list_datasources) for a coded entry, e.g. a diagnosis for condition-coded or a drug for medication-intake-coded, and get its label, codes (SNOMED-CT, ATC, RxNorm, …) and hdsId to store unchanged in the item\'s content. The search text is sent to the HDS datasets service of the connected platform (demo when not connected); tell the user when the text names their condition or medication. The lists are curated and incomplete: on no match, tell the user, never invent a code.',
+    searchDatasetInput,
+    wrap(searchDatasetHandler)
   );
 
   return server;

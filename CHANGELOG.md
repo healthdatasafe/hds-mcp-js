@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-02
+
+Data model and datasets read tools (site-agents#36 A7 in part).
+
+### Added
+- `search_items` searches labels in every pack locale (`lang` picks the one shown) and terminology codes: a LOINC,
+  SNOMED-CT, ICD-10 or ICF code finds the item that owns it, from `references` (including `loincMethod`),
+  per-unit `loinc`, and `fhir.code` / `fhir.alsoMatch` in both their plain and per-eventType shapes. Results list
+  the codes. Deprecated items are hidden unless `includeDeprecated: true`.
+- `get_event_type`: an eventType's content schema, unit name, attachment flag and the items using it.
+- `list_model_streams`: the data model's stream tree (roots or one stream's children) with the items per stream.
+- `list_datasources`: the HDS datasets and the items each one feeds.
+- `search_dataset`: search a dataset (condition, finding, medication, procedure, treatment) for a coded entry.
+  The endpoint is resolved like hds-lib, from `assets.datasets` of the connected platform's service-info (demo
+  when not connected). The tool description tells the agent the search text reaches the HDS datasets service.
+- `connect` remembers the platform's service-info URL for the session.
+
 ## [0.2.0] - 2026-11-02
 
 Driven by [site-agents#36](https://github.com/healthdatasafe/site-agents/issues/36) (A1, A2, A12).

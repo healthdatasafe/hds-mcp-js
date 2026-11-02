@@ -1,9 +1,16 @@
 let currentApiEndpoint: string | null = null;
 let prodWritesEnabled = false;
+let currentServiceInfoUrl: string | null = null;
 
-export function setApiEndpoint (apiEndpoint: string, enableProdWrites = false): void {
+export function setApiEndpoint (apiEndpoint: string, enableProdWrites = false, serviceInfoUrl?: string): void {
   currentApiEndpoint = apiEndpoint;
   prodWritesEnabled = enableProdWrites;
+  currentServiceInfoUrl = serviceInfoUrl ?? null;
+}
+
+/** The service-info URL of the connected platform, or null before connect. */
+export function getServiceInfoUrl (): string | null {
+  return currentServiceInfoUrl;
 }
 
 export function getApiEndpoint (): string {
@@ -20,6 +27,7 @@ export function getProdWritesEnabled (): boolean {
 export function clearApiEndpoint (): void {
   currentApiEndpoint = null;
   prodWritesEnabled = false;
+  currentServiceInfoUrl = null;
 }
 
 export function isConnected (): boolean {

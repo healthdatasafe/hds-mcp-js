@@ -31,7 +31,7 @@ export async function connectHandler (
     defaultName: 'All HDS data'
   }];
   const { apiEndpoint, username } = await runAuthFlow(serviceInfoUrl, permissions);
-  setApiEndpoint(apiEndpoint, enableWrites === true);
+  setApiEndpoint(apiEndpoint, enableWrites === true, serviceInfoUrl);
   const prodWriteNote = enableWrites === true
     ? ' Production writes: enabled for this session.'
     : '';

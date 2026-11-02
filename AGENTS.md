@@ -51,9 +51,9 @@ planning issues — see [healthdatasafe/_macro#23](https://github.com/healthdata
 
 ---
 
-## Tool catalogue (v0.2.0, tier=essential)
+## Tool catalogue (v0.3.0, tier=essential)
 
-All seven tools are tagged `essential` and exposed by default. The
+All eleven tools are tagged `essential` and exposed by default. The
 `extended` and `advanced` tiers are reserved for the v0.5 auto-gen pass.
 
 | Tool                  | Purpose                                                                 | Notable behaviour                                                                                                                                                                                                                                                                                                                  |
@@ -61,8 +61,12 @@ All seven tools are tagged `essential` and exposed by default. The
 | **`connect`**         | OAuth (Pryv poll-mode) — opens browser, polls until accept              | Defaults: `host: "demo"`, `level: "contribute"`, scope **all streams** (`streamId: "*"` — per-stream scoping not yet supported). Other levels: `read`, `manage`. `enableWrites: true` (only with `host: "prod"`, only on the user's explicit ask) unlocks prod writes for the session. Returns `apiEndpoint` (held in-memory in [`auth/session.ts`](src/auth/session.ts)). |
 | **`list_streams`**    | List the user's stream tree                                             | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
 | **`get_events`**      | Query events, filtered by stream / type / time range                    | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
-| **`search_items`**    | Search the HDS data-model catalogue                                     | Backed by [`dataModel/pack.ts`](src/dataModel/pack.ts) which fetches + caches `model.datasafe.dev/pack.json`. Scoring in [`tools/searchItems.ts`](src/tools/searchItems.ts) — exact-key match > exact-label match > substring matches.                                                                                              |
+| **`search_items`**    | Search the HDS data-model catalogue                                     | Backed by [`dataModel/pack.ts`](src/dataModel/pack.ts) which fetches + caches `model.datasafe.dev/pack.json`. Scoring in [`tools/searchItems.ts`](src/tools/searchItems.ts) — exact-key match > exact code match (LOINC / SNOMED-CT / ICD-10 / ICF from `references`, per-unit `loinc`, `fhir.code` / `alsoMatch`: [`dataModel/codes.ts`](src/dataModel/codes.ts)) > exact-label match (any locale) > substring matches. `lang` picks the label language; deprecated items hidden unless `includeDeprecated`.                                                                                              |
 | **`get_item`**        | Get one HDS item's full definition by key                               | Pulls from the same cached pack. Returns localised label/description, `streamId`, `eventType` (or `variations.eventType.options[]`), `type`, the content schema of each eventType and the data-model version (resolution in [`dataModel/eventTypes.ts`](src/dataModel/eventTypes.ts)).                                                                                                                                                                                       |
+| **`get_event_type`**  | One eventType: content schema, unit name, attachment flag, items using it | Pack only, no account needed.                                                                                                                                                                                                                                                                                                    |
+| **`list_model_streams`** | Browse the model's stream tree (roots or one stream's children) with items per stream | Pack only. Not the user's account (`list_streams` is).                                                                                                                                                                                                                                                         |
+| **`list_datasources`** | The HDS datasets and the items fed by each                             | Pack only.                                                                                                                                                                                                                                                                                                                       |
+| **`search_dataset`**  | Search one dataset (condition, finding, medication, procedure, treatment) | Endpoint resolved like hds-lib: `datasets://<kind>` joined to `assets.datasets` of the connected platform's service-info, demo when not connected ([`dataModel/datasources.ts`](src/dataModel/datasources.ts)). The search text reaches the HDS datasets service; the description tells the agent to say so. |
 | **`create_event`**    | Create one event                                                        | **Gated** on prod hosts via `assertWriteAllowed`. Description primes the agent to call `search_items` → `get_item` first. Takes optional `description` and `clientData`. Type + content validated against the pack before the call (`validateEvent`); refused with nothing written.                                                                                                                                                                                                          |
 | **`import_batch`**    | Create 1–500 events in one call                                         | Same gate. Same itemDef-first priming. Same fields and validation; one invalid event refuses the whole batch. Returns the created ids in input order (`null` where the core refused one).                                                                                                                                                                                                                                                                                             |
 
@@ -124,6 +128,11 @@ If no item matches, surface that to the user — the MCP does not invent.
 | Problem: type not in the data model           | ``Unknown event type "X": not in the HDS data model (data-model <version>). Use the eventType from get_item.`` |
 | Problem: type needs an attachment             | ``Event type "X" needs an attachment, which this MCP cannot upload yet.``                |
 | Problem: content does not match the schema    | ``content<path> <message> (<params>)``, e.g. ``content must be number ({"type":"number"})`` |
+| `get_event_type`: unknown type                | ``No HDS event type "X" in data-model <version>. Use search_items to find the item, then its eventType.`` |
+| `list_model_streams`: unknown parent          | ``No stream "X" in the HDS data model (data-model <version>).``                          |
+| `search_dataset`: unknown datasource          | ``No datasource "X" in data-model <version>. Available: <keys>.``                        |
+| `search_dataset`: text too short              | ``Search text too short for "X": at least N characters.``                                |
+| `search_dataset`: service error               | ``Dataset search failed: <upstream message>``                                            |
 
 Pryv backend status codes propagate through these wrappers; the
 underlying error body shape is
@@ -168,6 +177,8 @@ src/
   dataModel/
     pack.ts            # fetches + caches model.datasafe.dev/pack.json
     eventTypes.ts      # item eventTypes, content schemas, validateEvent (ajv draft-04)
+    codes.ts           # every terminology code an item carries (search by code)
+    datasources.ts     # datasource defs + endpoint resolution via service-info assets
   lib/
     scrubber.ts        # MANDATORY redactor on every log/error path
     hostPolicy.ts      # demo-default; PROD_WRITES_ENABLED gate
@@ -176,6 +187,7 @@ tests/
   scrubber.test.ts     # pins the redactor contract
   hostPolicy.test.ts   # pins demo-default + prod-write gate
   eventTypes.test.ts   # eventType resolution, validation, refusal wording
+  codes.test.ts        # code extraction (all pack shapes), code + locale search, endpoint resolution
 ```
 
 Auth flow is not unit-tested (network-dependent, browser-opening). It
