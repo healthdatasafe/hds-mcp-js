@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-02
+
 Discovery groundwork and tighter remote surface (plan 118).
 
 ### Added
