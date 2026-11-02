@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-02
+
+Driven by [site-agents#36](https://github.com/healthdatasafe/site-agents/issues/36) (A1, A2, A12).
+
+### Added
+- `create_event` / `import_batch` accept `description` and `clientData`, so the data-model conventions
+  (`sourceKey` / `related` provenance, `hdsTimePrecision` partial dates, `hdsRefRange` / `hdsFlag` /
+  `hdsComparator` lab values as printed) can be written through the MCP.
+- Content is validated before writing against the eventType's JSON Schema from the pack (ajv draft-04, the
+  options the data-model uses for the cores). Unknown types, invalid content and attachment-only types are
+  refused with nothing written; one invalid event refuses the whole batch.
+- `import_batch` returns the created event ids in input order (`null` where the core refused one).
+- `get_item` returns the eventType(s), including an item's unit choices, with each eventType's content schema.
+- The data-model version the MCP loaded is shown by `search_items`, `get_item` and the load log.
+- `connect` description: tell the user who sees what before reading any record, again before a first
+  production read.
+
+### Fixed
+- `search_items` threw on every call (`Cannot read properties of undefined (reading 'toLowerCase')`): 63 items
+  carry their eventType only as unit choices (`variations.eventType`). `get_item` showed `eventType: undefined`
+  for the same items.
+
 ## [0.1.0] - 2026-06-11
 
 ### Changed — production writes become a per-session user opt-in

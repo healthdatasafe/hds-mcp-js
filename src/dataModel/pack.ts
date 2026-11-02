@@ -7,16 +7,19 @@ export interface ItemDef {
   label?: Record<string, string>;
   description?: Record<string, string>;
   streamId: string;
-  eventType: string;
+  // Absent on items with a unit choice: see variations.eventType.
+  eventType?: string;
   type: string;
   repeatable?: string;
   unit?: string;
   scale?: unknown;
   options?: unknown;
+  variations?: { eventType?: { options?: Array<{ value?: string }> } };
   [k: string]: unknown;
 }
 
 export interface DataModelPack {
+  version?: string;
   publicationDate?: string;
   items: Record<string, ItemDef>;
   streams?: any;
@@ -40,7 +43,7 @@ export async function loadPack (url?: string): Promise<DataModelPack> {
       throw new Error('Pack did not contain an `items` object');
     }
     cached = pack;
-    safeLog(`Pack loaded: ${Object.keys(pack.items).length} items`);
+    safeLog(`Pack loaded: data-model ${pack.version ?? '(version unknown)'}, ${Object.keys(pack.items).length} items`);
     return pack;
   })();
   return loadingPromise;

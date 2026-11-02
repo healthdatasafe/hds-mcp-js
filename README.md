@@ -1,6 +1,6 @@
 # hds-mcp
 
-> **Status: v0.1.0 — production access when you're ready.** One-line
+> **Status: v0.2.0 — production access when you're ready.** One-line
 > install (`npx -y github:healthdatasafe/hds-mcp-js`), demo sandbox by
 > default, and now a per-session opt-in for writing to your real
 > production account — you ask for it explicitly, the agent passes
@@ -142,6 +142,11 @@ next session starts back in the safe state.
 ## Privacy
 
 - The MCP runs on **your** computer; nothing routes through us.
+- **Your AI agent's provider sees what the agent reads.** Every record,
+  scan or value the agent reads is sent to the company that runs the agent;
+  the MCP cannot change that. For medical records, a provider that does not
+  train on your data, or a model on your own computer, is the safer choice.
+  The agent is told to say this before reading anything.
 - Your sign-in token is held in memory only and is gone when Claude Desktop
   quits.
 - The MCP scrubs your token from any log line or error message before
@@ -168,7 +173,11 @@ next session starts back in the safe state.
 
 ## Roadmap
 
-- **v0.1.0 (current)** — production writes become a per-session user
+- **v0.2.0 (current)**: the write tools take `description` and
+  `clientData`, check content against the data model before writing, and
+  return the created ids in order; `get_item` shows content schemas;
+  `search_items` no longer crashes on items with a unit choice.
+- **v0.1.0** — production writes become a per-session user
   opt-in: `connect({ host: "prod", enableWrites: true })`, only when the
   user explicitly asks. Replaces the planned global gate-flip.
 - **v0.0.7** — installable with one line via
@@ -191,7 +200,7 @@ next session starts back in the safe state.
 
 ```bash
 npm install
-npm test           # runs the token-scrubber unit test
+npm test           # scrubber, host policy, eventType validation
 npm run lint
 ```
 
@@ -214,6 +223,7 @@ src/
     getItem.ts
   dataModel/
     pack.ts            # fetches + caches model.datasafe.dev/pack.json
+    eventTypes.ts      # item eventTypes, content schemas, validation before writing
   lib/
     scrubber.ts        # centralized token redactor (mandatory on every log/error)
     hostPolicy.ts      # demo-default; prod-write gate (session opt-in or env override)
@@ -221,6 +231,7 @@ src/
 tests/
   scrubber.test.ts     # pins the redactor contract
   hostPolicy.test.ts   # pins demo-default + prod-write gate
+  eventTypes.test.ts   # eventType resolution + content validation + refusal wording
 ```
 
 License: BSD-3-Clause.

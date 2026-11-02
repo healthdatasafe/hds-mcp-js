@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { loadPack, en, type ItemDef } from '../dataModel/pack.ts';
+import { itemEventTypes, packLabel } from '../dataModel/eventTypes.ts';
 
 export const searchItemsInput = {
   query: z.string().min(1).describe(
@@ -36,7 +37,7 @@ export async function searchItemsHandler (
         label: en(item.label),
         description: en(item.description),
         streamId: item.streamId,
-        eventType: item.eventType,
+        eventType: itemEventTypes(item).join(' | '),
         type: item.type,
         score
       });
@@ -47,7 +48,7 @@ export async function searchItemsHandler (
 
   if (top.length === 0) {
     return {
-      content: [{ type: 'text', text: `No HDS items matched "${query}".` }]
+      content: [{ type: 'text', text: `No HDS items matched "${query}" (${packLabel(pack)}).` }]
     };
   }
 
@@ -61,12 +62,12 @@ export async function searchItemsHandler (
       type: 'text',
       text: `Found ${matches.length} item(s) matching "${query}"` +
         (matches.length > top.length ? ` (showing top ${top.length})` : '') +
-        ':\n\n' + lines.join('\n')
+        ` in ${packLabel(pack)}:\n\n` + lines.join('\n')
     }]
   };
 }
 
-function scoreItem (key: string, item: ItemDef, q: string): number {
+export function scoreItem (key: string, item: ItemDef, q: string): number {
   let score = 0;
   if (key.toLowerCase() === q) score += 100;
   if (key.toLowerCase().includes(q)) score += 30;
@@ -76,6 +77,6 @@ function scoreItem (key: string, item: ItemDef, q: string): number {
   const desc = en(item.description).toLowerCase();
   if (desc.includes(q)) score += 5;
   if (item.streamId.toLowerCase().includes(q)) score += 10;
-  if (item.eventType.toLowerCase().includes(q)) score += 10;
+  if (itemEventTypes(item).some((t) => t.toLowerCase().includes(q))) score += 10;
   return score;
 }

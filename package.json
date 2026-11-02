@@ -1,6 +1,6 @@
 {
   "name": "hds-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server exposing Health Data Safe / Pryv tools to AI agents (non-developer first)",
   "type": "module",
   "engines": {
@@ -45,6 +45,8 @@
   "homepage": "https://github.com/healthdatasafe/hds-mcp-js#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
+    "ajv": "^8.20.0",
+    "ajv-draft-04": "^1.0.0",
     "open": "^10.1.0",
     "zod": "^3.23.0"
   },

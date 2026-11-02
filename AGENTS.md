@@ -51,7 +51,7 @@ planning issues — see [healthdatasafe/_macro#23](https://github.com/healthdata
 
 ---
 
-## Tool catalogue (v0.1.0, tier=essential)
+## Tool catalogue (v0.2.0, tier=essential)
 
 All seven tools are tagged `essential` and exposed by default. The
 `extended` and `advanced` tiers are reserved for the v0.5 auto-gen pass.
@@ -62,9 +62,9 @@ All seven tools are tagged `essential` and exposed by default. The
 | **`list_streams`**    | List the user's stream tree                                             | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
 | **`get_events`**      | Query events, filtered by stream / type / time range                    | Reads always allowed on demo + prod.                                                                                                                                                                                                                                                                                               |
 | **`search_items`**    | Search the HDS data-model catalogue                                     | Backed by [`dataModel/pack.ts`](src/dataModel/pack.ts) which fetches + caches `model.datasafe.dev/pack.json`. Scoring in [`tools/searchItems.ts`](src/tools/searchItems.ts) — exact-key match > exact-label match > substring matches.                                                                                              |
-| **`get_item`**        | Get one HDS item's full definition by key                               | Pulls from the same cached pack. Returns localised label/description, `streamId`, `eventType` (or `variations.eventType.options[]`), `type`.                                                                                                                                                                                       |
-| **`create_event`**    | Create one event                                                        | **Gated** on prod hosts via `assertWriteAllowed`. Description primes the agent to call `search_items` → `get_item` first.                                                                                                                                                                                                          |
-| **`import_batch`**    | Create 1–500 events in one call                                         | Same gate. Same itemDef-first priming.                                                                                                                                                                                                                                                                                             |
+| **`get_item`**        | Get one HDS item's full definition by key                               | Pulls from the same cached pack. Returns localised label/description, `streamId`, `eventType` (or `variations.eventType.options[]`), `type`, the content schema of each eventType and the data-model version (resolution in [`dataModel/eventTypes.ts`](src/dataModel/eventTypes.ts)).                                                                                                                                                                                       |
+| **`create_event`**    | Create one event                                                        | **Gated** on prod hosts via `assertWriteAllowed`. Description primes the agent to call `search_items` → `get_item` first. Takes optional `description` and `clientData`. Type + content validated against the pack before the call (`validateEvent`); refused with nothing written.                                                                                                                                                                                                          |
+| **`import_batch`**    | Create 1–500 events in one call                                         | Same gate. Same itemDef-first priming. Same fields and validation; one invalid event refuses the whole batch. Returns the created ids in input order (`null` where the core refused one).                                                                                                                                                                                                                                                                                             |
 
 ### Tool descriptions are part of the surface
 
@@ -106,7 +106,7 @@ If no item matches, surface that to the user — the MCP does not invent.
 
 ---
 
-## Error shapes (verbatim, as of v0.1.0)
+## Error shapes (verbatim, as of v0.2.0)
 
 | Trigger                                       | Message                                                                                  |
 |-----------------------------------------------|------------------------------------------------------------------------------------------|
@@ -119,6 +119,11 @@ If no item matches, surface that to the user — the MCP does not invent.
 | Pryv API (POST) error                         | ``Pryv POST <path> failed: <upstream message>``                                          |
 | Pryv batch error                              | ``Pryv batch failed: <upstream message>``                                                |
 | Item key not found in pack.json               | ``No HDS item found for key "X".`` (with optional ``Did you mean one of: …?`` hint)      |
+| `create_event`: type or content invalid       | ``Event refused, nothing written: <problems>``                                           |
+| `import_batch`: any event invalid             | ``Batch refused, nothing written: N problem(s).`` then one ``- [index] <problem>`` line each (first 20) |
+| Problem: type not in the data model           | ``Unknown event type "X": not in the HDS data model (data-model <version>). Use the eventType from get_item.`` |
+| Problem: type needs an attachment             | ``Event type "X" needs an attachment, which this MCP cannot upload yet.``                |
+| Problem: content does not match the schema    | ``content<path> <message> (<params>)``, e.g. ``content must be number ({"type":"number"})`` |
 
 Pryv backend status codes propagate through these wrappers; the
 underlying error body shape is
@@ -162,6 +167,7 @@ src/
   tools/               # one file per tool (input schema + handler)
   dataModel/
     pack.ts            # fetches + caches model.datasafe.dev/pack.json
+    eventTypes.ts      # item eventTypes, content schemas, validateEvent (ajv draft-04)
   lib/
     scrubber.ts        # MANDATORY redactor on every log/error path
     hostPolicy.ts      # demo-default; PROD_WRITES_ENABLED gate
@@ -169,6 +175,7 @@ src/
 tests/
   scrubber.test.ts     # pins the redactor contract
   hostPolicy.test.ts   # pins demo-default + prod-write gate
+  eventTypes.test.ts   # eventType resolution, validation, refusal wording
 ```
 
 Auth flow is not unit-tested (network-dependent, browser-opening). It
