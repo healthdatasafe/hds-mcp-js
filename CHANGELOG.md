@@ -2,6 +2,22 @@
 
 ## [Unreleased]
 
+CI-built image for the remote transport (plan 118, plan 102 procedure), deployed on demo at `demo-mcp.datasafe.dev`.
+
+### Added
+- `GET /status` on `hds-mcp-http`: `{ status: 'ok', name, version }`, no auth, before the Origin check. Used by the
+  Dokku startup healthcheck (`app.json`) and by `deploy-image.sh`, which asserts `version`.
+- Aggregate telemetry through `hds-observability-js` (an **optional** git dependency, no vendor agent, so a stdio
+  install never needs it: it is loaded at runtime and declared locally for the compiler, and the image smoke test
+  asserts it is present): call counts and durations per
+  registered route (`POST|GET|DELETE <mcp path>`, `GET /status`, the two `.well-known` metadata routes) and error
+  counts by a closed set of codes derived from the HTTP status. Off unless `HDS_OTEL_ENDPOINT` is set; the stdio
+  server never loads it. Last window flushed on SIGTERM.
+- Image build: `Dockerfile` (builds `dist/` in the image, runs `node dist/httpMain.js` as uid 32767 on port 7450),
+  `.dockerignore`, `app.json`, `.github/workflows/build-image.yml` (`ghcr.io/healthdatasafe/hds-mcp-js`, tests on,
+  smoke-imports `dist/` in the image) and `prune-images.yml`.
+- `npm run typecheck`.
+
 ## [0.5.0] - 2026-11-02
 
 Remote transport, preview, demo only (plan 118 phase 3a). Not deployed: the end-to-end spike needs core registry rows from

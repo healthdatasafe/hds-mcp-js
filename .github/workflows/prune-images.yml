@@ -1,0 +1,36 @@
+# Shared GHCR retention workflow for HDS image-built services (plan 102, task 1.7).
+#
+# Copy into an app repo as `.github/workflows/prune-images.yml`. Per-app change: the
+# PACKAGE line. It keeps the 10 newest package versions and deletes older ones.
+#
+# WHY THIS IS SAFE ONLY WITH `provenance: false` IN build-image.yml: with provenance on,
+# every release is an OCI index whose image and attestation manifests are separate,
+# UNTAGGED package versions. Counting or deleting by version would then remove children
+# of releases that are still tagged, and pulls of those releases would break. With
+# provenance off, one release is one package version (both of its tags, `X.Y.Z` and
+# `sha-<commit>`, point at it), so "keep 10 versions" means "keep the last 10 releases".
+#
+# Releases before provenance was turned off (bridge-mira 1.8.1) are three versions each:
+# the index and two untagged children. They count toward the 10, and at the cut-off a
+# child can be deleted one run before its index, leaving that release unpullable for a
+# month. By then it is about 8 releases old and no rollback would target it.
+
+name: Prune images
+
+on:
+  schedule:
+    - cron: '17 3 1 * *'   # monthly, 03:17 UTC on the 1st
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/delete-package-versions@v5
+        with:
+          package-name: hds-mcp-js   # PER-APP: the repo name
+          package-type: container
+          min-versions-to-keep: 10

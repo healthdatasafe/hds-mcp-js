@@ -2,9 +2,11 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import { readFileSync } from 'node:fs';
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { createHttpApp } from '../src/http/app.ts';
 import { introspectionVerifier } from '../src/http/introspection.ts';
+import { httpMethods, initHttpObservability } from '../src/http/observability.ts';
 
 // A fake core API: answers batch calls with the token it received, so each user can see whose token was used.
 let api: http.Server;
@@ -100,6 +102,45 @@ test('a foreign Origin is refused, an allowed one passes', async () => {
 
 test('GET on the MCP path: 405', async () => {
   assert.equal((await fetch(mcpUrl)).status, 405);
+});
+
+test('GET /status: 200 with name and version, no token, any Origin', async () => {
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  const res = await fetch(mcpUrl.replace('/mcp', '/status'), { headers: { origin: 'https://evil.example' } });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), { status: 'ok', name: pkg.name, version: pkg.version });
+});
+
+test('observability: records registered route ids only, with status class and error code', async () => {
+  const calls: string[] = [];
+  const errors: string[] = [];
+  const methods = httpMethods('/mcp');
+  const app = createHttpApp({
+    publicUrl: new URL('http://127.0.0.1/mcp'),
+    oauthMetadata: { issuer: 'https://issuer.test', authorization_endpoint: 'https://issuer.test/a', token_endpoint: 'https://issuer.test/t', response_types_supported: ['code'] },
+    allowedOrigins: [],
+    verifier: { async verifyAccessToken () { throw new InvalidTokenError('Token is not active'); } },
+    observability: { obs: { recordCall: (m, s) => { calls.push(`${m} ${s}`); }, recordError: (c) => { errors.push(c); } }, methods }
+  });
+  const s = http.createServer(app);
+  const base = await listen(s);
+  try {
+    await fetch(`${base}/status`);
+    await fetch(`${base}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    await fetch(`${base}/.well-known/oauth-protected-resource/mcp?x=1`);
+    await fetch(`${base}/users/alice/secret`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } finally { s.close(); }
+  assert.deepEqual(calls.sort(), ['GET /.well-known/oauth-protected-resource/mcp 2xx', 'GET /status 2xx', 'POST /mcp 4xx']);
+  assert.deepEqual(errors, ['UNAUTHORIZED']);
+  assert.ok(calls.every((c) => methods.some((m) => c.startsWith(m + ' '))));
+});
+
+test('initHttpObservability: disabled without HDS_OTEL_ENDPOINT, named hds-<env>-mcp when set', async () => {
+  assert.equal(await initHttpObservability({}, '1.0.0', httpMethods('/mcp')), null);
+  const obs = await initHttpObservability({ HDS_OTEL_ENDPOINT: 'http://127.0.0.1:4318', HDS_ENV: 'demo' }, '1.0.0', httpMethods('/mcp'), async () => {});
+  assert.ok(obs);
+  await obs.stop();
 });
 
 test('introspectionVerifier: active token → credentials at api_base; prod, inactive and foreign audience refused', async () => {

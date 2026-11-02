@@ -187,6 +187,18 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   gate before production, and production `api_base` hosts are refused until then.
 - One MCP per core: issuers are per core, and clients follow only the first `authorization_servers` entry.
 
+**Deploy.** CI-built image `ghcr.io/healthdatasafe/hds-mcp-js` (built on a `vX.Y.Z` tag by
+`.github/workflows/build-image.yml`, deployed with `infra/dev-deploy/dokku/deploy-image.sh`), running
+`node dist/httpMain.js` as uid 32767 on port **7450** (`PORT`, set in the image; map it with
+`dokku ports:set <app> http:80:7450 https:443:7450`). `GET /status` answers `{ status, name, version }` without auth:
+the Dokku startup healthcheck (`app.json`) and the deploy's version assertion read it. Environment: `HDS_MCP_ISSUER`,
+`HDS_MCP_PUBLIC_URL`, `HDS_MCP_INTROSPECT_CLIENT_ID`, `HDS_MCP_INTROSPECT_CLIENT_SECRET`, `HDS_MCP_SERVICE_INFO`,
+`HDS_MCP_ALLOWED_ORIGINS`, `PORT`, and for telemetry `HDS_OTEL_ENDPOINT` (the host collector's bare base URL,
+`http://172.17.0.1:4318`; unset = telemetry off) and `HDS_OTEL_SERVICE_NAME` (`hds-<env>-mcp`; default built from
+`HDS_ENV`, itself defaulting to `dev`). Telemetry goes only through `hds-observability-js`
+([`src/http/observability.ts`](src/http/observability.ts)): aggregate counts per registered route, never a concrete
+path; never add a vendor agent. Logs go to stderr only, nothing is written under `/app`.
+
 ## Source layout
 
 ```

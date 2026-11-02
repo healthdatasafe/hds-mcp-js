@@ -31,7 +31,7 @@ function wrap<T> (handler: (a: T) => Promise<any>) {
 }
 
 // One level below the package root in both layouts (src/ and dist/).
-const { version } = JSON.parse(
+export const { name: packageName, version } = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
 );
 

@@ -4,15 +4,18 @@ import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middlew
 import { mcpAuthMetadataRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 import type { OAuthMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
-import { buildServer } from '../server.ts';
+import { buildServer, packageName, version } from '../server.ts';
 import { runWithCredentials, type RequestCredentials } from '../auth/session.ts';
 import { safeLog } from '../lib/scrubber.ts';
+import { observabilityTiming, type HttpObservability } from './observability.ts';
 
 export interface HttpAppConfig {
   publicUrl: URL;
   oauthMetadata: OAuthMetadata;
   verifier: OAuthTokenVerifier;
   allowedOrigins: string[];
+  /** Aggregate telemetry (hds-observability-js); omitted or null when disabled. */
+  observability?: { obs: HttpObservability, methods: readonly string[] } | null;
 }
 
 /** DNS-rebinding guard (MCP spec): a request carrying an Origin must come from an allowed one. */
@@ -30,6 +33,11 @@ function originCheck (allowed: string[]) {
 export function createHttpApp (cfg: HttpAppConfig): express.Express {
   const app = express();
   app.disable('x-powered-by');
+  if (cfg.observability) app.use(observabilityTiming(cfg.observability.obs, cfg.observability.methods));
+  // Liveness for the Dokku deploy healthcheck and deploy-image.sh (which reads `version`). No auth, no dependency.
+  app.get('/status', (_req: Request, res: Response) => {
+    res.json({ status: 'ok', name: packageName, version });
+  });
   app.use(originCheck(cfg.allowedOrigins));
   app.use(mcpAuthMetadataRouter({
     oauthMetadata: cfg.oauthMetadata,

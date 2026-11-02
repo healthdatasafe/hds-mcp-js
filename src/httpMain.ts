@@ -2,6 +2,8 @@
 import type { OAuthMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { createHttpApp } from './http/app.ts';
 import { introspectionVerifier } from './http/introspection.ts';
+import { httpMethods, initHttpObservability } from './http/observability.ts';
+import { version } from './server.ts';
 import { resolveServiceInfoUrl } from './lib/hostPolicy.ts';
 import { safeLog } from './lib/scrubber.ts';
 
@@ -21,9 +23,13 @@ if (!metaRes.ok) throw new Error(`Cannot read the authorization server metadata 
 const oauthMetadata = await metaRes.json() as OAuthMetadata & { introspection_endpoint?: string };
 if (!oauthMetadata.introspection_endpoint) throw new Error(`${issuer} publishes no introspection endpoint`);
 
+const methods = httpMethods(publicUrl.pathname);
+const obs = await initHttpObservability(process.env, String(version), methods);
+
 const app = createHttpApp({
   publicUrl,
   oauthMetadata,
+  observability: obs ? { obs, methods } : null,
   allowedOrigins: (process.env.HDS_MCP_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   verifier: introspectionVerifier({
     introspectionEndpoint: oauthMetadata.introspection_endpoint,
@@ -33,4 +39,10 @@ const app = createHttpApp({
     serviceInfoUrl
   })
 });
-app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}`));
+const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}`));
+
+// Flush the last telemetry window on a Dokku stop / redeploy.
+process.once('SIGTERM', () => {
+  server.close();
+  (obs ? obs.stop() : Promise.resolve()).finally(() => process.exit(0));
+});

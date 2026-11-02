@@ -1,0 +1,221 @@
+# Shared image-build workflow for HDS Node backend services (plan 102).
+#
+# Copy into an app repo as `.github/workflows/build-image.yml`. Per-app changes are
+# limited to the block marked PER-APP at the top of `env:`.
+#
+# WHY TAGS ONLY: a tag is the signal that we intend to deploy. Building on every
+# push would fill a metered GHCR quota with images nobody deploys, and would make
+# "which image is prod meant to be on?" ambiguous. One tag, one image, one answer.
+#
+# WHY THIS REPLACES BUILDING ON THE HOST: helpers-ch1 has 1.9 GiB RAM and runs six
+# containers. On-host `npm install` was OOM-killed on 4 of ~9 deploys (2026-09-23/24,
+# confirmed in dmesg). Worse, a failed build there RETAGS THE OLD IMAGE and keeps
+# serving it, so a broken deploy looks like a no-op while prod silently runs older
+# code. A failed build here publishes nothing, so the host is never asked to change.
+
+name: Build image
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # Manual dry run (Actions tab, or `gh workflow run build-image.yml`): the gates, the
+  # candidate build and its smoke test. Nothing is pushed and no Release is created.
+  workflow_dispatch:
+
+permissions:
+  contents: write   # create the Release that records the image digest
+  packages: write   # push to the repo-linked GHCR package (no PAT needed in CI)
+
+env:
+  # PER-APP -----------------------------------------------------------------
+  IMAGE_NAME: ghcr.io/healthdatasafe/hds-mcp-js
+  RUN_TESTS: 'true'    # 'true' only where the repo's own ci.yml runs `npm test`
+  # Optional command run INSIDE the built image before anything is published, for what
+  # the tests cannot prove about the image itself (e.g. a native module that must load).
+  # hds-mcp-js: the compiled dist/ and its runtime deps (incl. the git dep hds-observability-js) must resolve.
+  SMOKE_CMD: 'node --input-type=module -e "await import(''./dist/http/app.js''); await import(''hds-observability-js''); console.log(''dist ok'')"'
+  # How the gates install dependencies. Override when the repo has a nested package the
+  # typecheck or tests need (e.g. athenahealth's pryv-saml-proxy).
+  INSTALL_CMD: 'npm ci'
+  # -------------------------------------------------------------------------
+  # Must match the Dockerfile's pinned base image (Node 24.22.1, 2026-10-21 security
+  # release). Images built before it ran 24.18.0, held back by nodejs/node#65446, which
+  # no longer reproduces on 24.22.1; see the Dockerfile comment.
+  NODE_VERSION: '24.22.1'
+
+jobs:
+  gates:
+    name: Gates
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # The tag is the deploy contract, so it must not be able to lie.
+      - name: Assert tag matches package.json version
+        if: github.event_name == 'push'
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          PKG="v$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::tag $TAG does not match package.json version $PKG"
+            exit 1
+          fi
+          echo "tag $TAG matches package.json"
+
+      # Stops a tag cut from a branch that was never reviewed or merged.
+      - name: Assert the tag commit is on main
+        if: github.event_name == 'push'
+        run: |
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::tag commit $GITHUB_SHA is not an ancestor of origin/main"
+            exit 1
+          fi
+          echo "tag commit is on main"
+
+      - name: Install Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: ${{ env.INSTALL_CMD }}
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Typecheck
+        run: npm run typecheck --if-present   # e.g. bridge-chartneo has no typecheck
+
+      # Several of these repos deliberately have no CI test step: their suites boot a
+      # real bridge account and cannot run against the sample config CI has.
+      - name: Test
+        if: env.RUN_TESTS == 'true'
+        run: npm test
+
+  image:
+    name: Build and push image
+    runs-on: ubuntu-22.04
+    needs: gates
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve version
+        id: v
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = push ]; then
+            echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=$(jq -r .version package.json)-dryrun" >> "$GITHUB_OUTPUT"
+          fi
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # An image tag is immutable in this scheme: deploys resolve by digest, and
+      # silently republishing a version would make a digest recorded in a Release
+      # point at something else. Re-releasing means a new version number.
+      - name: Refuse to overwrite an existing version
+        if: github.event_name == 'push'
+        run: |
+          if docker manifest inspect "${IMAGE_NAME}:${{ steps.v.outputs.version }}" > /dev/null 2>&1; then
+            echo "::error::${IMAGE_NAME}:${{ steps.v.outputs.version }} already exists; bump the version instead"
+            exit 1
+          fi
+          echo "version is free"
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v4
+
+      # Build locally first so the candidate can be smoke-tested BEFORE anything is
+      # published. Nothing reaches the registry until it has started once.
+      - name: Build candidate
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: candidate:local
+          build-args: |
+            SOURCE_COMMIT=${{ github.sha }}
+            IMAGE_VERSION=${{ steps.v.outputs.version }}
+            BUILD_DATE=${{ steps.v.outputs.date }}
+
+      - name: Smoke-test the candidate
+        run: |
+          set -e
+          ACTUAL_NODE=$(docker run --rm candidate:local node --version)
+          if [ "$ACTUAL_NODE" != "v${NODE_VERSION}" ]; then
+            echo "::error::image Node $ACTUAL_NODE != pinned v${NODE_VERSION}"
+            exit 1
+          fi
+          UID_IN=$(docker run --rm candidate:local id -u)
+          if [ "$UID_IN" != "32767" ]; then
+            echo "::error::image runs as uid $UID_IN, expected 32767 (herokuish parity)"
+            exit 1
+          fi
+          docker run --rm candidate:local node -e "require('./package.json'); console.log('module resolution ok')"
+          if [ -n "$SMOKE_CMD" ]; then
+            docker run --rm candidate:local sh -c "$SMOKE_CMD"
+            echo "per-app smoke ok"
+          fi
+          echo "smoke ok: node $ACTUAL_NODE, uid $UID_IN"
+
+      - name: Push image
+        if: github.event_name == 'push'
+        id: push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          # One plain manifest per release, no untagged attestation children. With
+          # provenance on, each release is an index whose image and attestation manifests
+          # are untagged package versions, and any "delete untagged" retention rule would
+          # break every tagged image (plan 102, 1.7). Nothing here verifies attestations.
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ steps.v.outputs.version }}
+            ${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+          build-args: |
+            SOURCE_COMMIT=${{ github.sha }}
+            IMAGE_VERSION=${{ steps.v.outputs.version }}
+            BUILD_DATE=${{ steps.v.outputs.date }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.v.outputs.version }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      # The Release body is the handoff to `deploy-image.sh` and the human-readable
+      # audit trail: it is where "what was version X.Y.Z, exactly?" is answered.
+      - name: Create Release recording the digest
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          {
+            echo "Image: \`${IMAGE_NAME}@${DIGEST}\`"
+            echo "Tag: \`${IMAGE_NAME}:${VERSION}\`"
+            echo "Commit: \`${GITHUB_SHA}\`"
+            echo "Node: \`${NODE_VERSION}\`"
+            echo ""
+            echo "Deploy with:"
+            echo '```'
+            echo "infra/dev-deploy/dokku/deploy-image.sh <app> <dev|prod> ${VERSION}"
+            echo '```'
+          } > release-notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file release-notes.md

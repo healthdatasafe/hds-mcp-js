@@ -1,0 +1,44 @@
+# Shared .dockerignore for HDS Node backend services (plan 102), from
+# `infra/dev-deploy/templates/dockerignore`.
+#
+# Two jobs. First, keep the build context small and the image reproducible. Second,
+# and more important: make sure a developer's gitignored credential files can never
+# be swept into a build context. CI builds from a clean checkout so they are not
+# present there, but `docker build` run by hand on a working tree would pick them up.
+# Patterns use `**/` so they also match inside nested packages.
+
+# --- credentials and local config: never in an image ---
+**/localConfig*
+**/*.key
+**/*.pem
+**/backloop.dev.json
+**/secrets/
+**/.env
+**/.env.*
+
+# --- build output / installed deps (the image installs and builds its own) ---
+**/node_modules
+dist
+coverage
+
+# --- runtime state that must come from the Dokku storage mount, not the image ---
+storage/
+data/
+debugLog/
+**/application.log
+**/*.log
+
+# --- repo furniture with no runtime role ---
+# (hds-mcp-js keeps tsconfig*.json: the image runs `npm run build`.)
+.git
+.github
+.gitignore
+tests
+test
+doc
+docs
+_notes
+*.md
+!README.md
+eslint.config.*
+.editorconfig
