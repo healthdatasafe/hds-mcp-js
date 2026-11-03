@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-03
+
+### Added
+- `HDS_MCP_SCOPES` (space-separated): published as `scopes_supported` in the protected-resource metadata. A client
+  that names no scope asks for this list (MCP spec); Claude Code does, and the core refuses an empty scope
+  (`invalid_scope`). Unset = no `scopes_supported`, as before.
+
 ## [0.7.0] - 2026-11-02
 
 Discovery groundwork and tighter remote surface (plan 118).

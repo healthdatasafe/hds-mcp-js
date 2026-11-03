@@ -191,6 +191,9 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   CORS-open. A core lists this server's base URL in `/service/info` `adapters`; the account app reads the manifest to
   show the user their URL. Gated: nothing lists it until CIMD (perki).
 - `HDS_MCP_REQUIRE_AUDIENCE=true` refuses tokens without `aud` (switch on with rc.70 + `--audience` rows).
+- `HDS_MCP_SCOPES` (space-separated) is published as `scopes_supported`: the default a client asks for when it names
+  no scope (Claude Code). Demo: `offline_access` + `hds/stream/<root>.read` on the 17 connector-row roots (perki,
+  read-only default).
 - Not offered over HTTP: `connect` (OAuth signs in) and `ensure_streams` (no grant carries `manage`).
 
 **Deploy.** CI-built image `ghcr.io/healthdatasafe/hds-mcp-js` (built on a `vX.Y.Z` tag by

@@ -18,6 +18,8 @@ export interface HttpAppConfig {
   observability?: { obs: HttpObservability, methods: readonly string[] } | null;
   /** Public OAuth client ids registered at the core for each connector product, shown in the manifest. */
   connectorClients?: Record<string, string>;
+  /** `scopes_supported` in the protected-resource metadata: what a client that names no scope asks for (MCP spec). */
+  scopesSupported?: string[];
 }
 
 /**
@@ -70,7 +72,8 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
   app.use(mcpAuthMetadataRouter({
     oauthMetadata: cfg.oauthMetadata,
     resourceServerUrl: cfg.publicUrl,
-    resourceName: 'Health Data Safe'
+    resourceName: 'Health Data Safe',
+    scopesSupported: cfg.scopesSupported?.length ? cfg.scopesSupported : undefined
   }));
   const auth = requireBearerAuth({
     verifier: cfg.verifier,

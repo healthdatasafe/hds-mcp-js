@@ -29,6 +29,7 @@ before(async () => {
     oauthMetadata: { issuer: 'https://issuer.test', authorization_endpoint: 'https://issuer.test/a', token_endpoint: 'https://issuer.test/t', response_types_supported: ['code'] },
     allowedOrigins: ['https://allowed.example'],
     connectorClients: { claude: 'hds-mcp-claude' },
+    scopesSupported: ['offline_access', 'hds/stream/body.read'],
     verifier: {
       async verifyAccessToken (token: string) {
         if (!users[token]) throw new InvalidTokenError('Token is not active');
@@ -67,10 +68,12 @@ test('unknown token: 401', async () => {
   assert.equal((await callGetEvents('tok-mallory')).status, 401);
 });
 
-test('protected-resource metadata names the issuer', async () => {
+test('protected-resource metadata names the issuer and the scopes to ask for', async () => {
   const res = await fetch(mcpUrl.replace('/mcp', '/.well-known/oauth-protected-resource/mcp'));
   assert.equal(res.status, 200);
-  assert.deepEqual(((await res.json()) as { authorization_servers: string[] }).authorization_servers, ['https://issuer.test']);
+  const body = (await res.json()) as { authorization_servers: string[], scopes_supported?: string[] };
+  assert.deepEqual(body.authorization_servers, ['https://issuer.test']);
+  assert.deepEqual(body.scopes_supported, ['offline_access', 'hds/stream/body.read']);
 });
 
 test('tools/list over HTTP has no connect tool', async () => {

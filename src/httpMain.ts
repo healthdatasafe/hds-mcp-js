@@ -34,6 +34,8 @@ const app = createHttpApp({
   connectorClients: Object.fromEntries((process.env.HDS_MCP_CONNECTOR_CLIENTS ?? '').split(',')
     .map((p) => p.split('=').map((s) => s.trim())).filter((kv) => kv.length === 2 && kv[0] && kv[1])),
   allowedOrigins: (process.env.HDS_MCP_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
+  // Space-separated, e.g. "offline_access hds/stream/body.read". Claude Code sends no scope and asks for these.
+  scopesSupported: (process.env.HDS_MCP_SCOPES ?? '').split(/\s+/).filter(Boolean),
   verifier: introspectionVerifier({
     introspectionEndpoint: oauthMetadata.introspection_endpoint,
     clientId: required('HDS_MCP_INTROSPECT_CLIENT_ID'),
