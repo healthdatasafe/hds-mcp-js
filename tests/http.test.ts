@@ -169,9 +169,11 @@ test('initHttpObservability: disabled without HDS_OTEL_ENDPOINT, named hds-<env>
 test('introspectionVerifier: active token → credentials at api_base; prod, inactive and foreign audience refused', async () => {
   const answers: Record<string, unknown> = {
     good: { active: true, client_id: 'claude', scope: 'hds/stream/body.read', api_base: 'https://alice.demo.datasafe.dev/', aud: 'https://mcp.demo.datasafe.dev/mcp' },
-    prod: { active: true, api_base: 'https://alice.api.datasafe.dev/' },
+    prod: { active: true, api_base: 'https://alice.api.datasafe.dev/', aud: 'https://mcp.demo.datasafe.dev/mcp' },
     dead: { active: false },
-    other: { active: true, api_base: 'https://alice.demo.datasafe.dev/', aud: 'https://elsewhere.example/' }
+    other: { active: true, api_base: 'https://alice.demo.datasafe.dev/', aud: 'https://elsewhere.example/' },
+    noaud: { active: true, api_base: 'https://alice.demo.datasafe.dev/' },
+    plain: { active: true, api_base: 'http://alice.demo.datasafe.dev/', aud: 'https://mcp.demo.datasafe.dev/mcp' }
   };
   let calls = 0;
   const v = introspectionVerifier({
@@ -195,6 +197,42 @@ test('introspectionVerifier: active token → credentials at api_base; prod, ina
   await assert.rejects(v.verifyAccessToken('prod'), /not available for production/);
   await assert.rejects(v.verifyAccessToken('dead'), /not active/);
   await assert.rejects(v.verifyAccessToken('other'), /not issued for this MCP/);
+  await assert.rejects(v.verifyAccessToken('noaud'), /not issued for this MCP/, 'aud required by default');
+  await assert.rejects(v.verifyAccessToken('plain'), /non-https API base/);
+});
+
+test('introspectionVerifier: requireAudience false accepts a token without aud, still refuses a foreign one', async () => {
+  const answers: Record<string, unknown> = {
+    noaud: { active: true, api_base: 'https://alice.demo.datasafe.dev/' },
+    other: { active: true, api_base: 'https://alice.demo.datasafe.dev/', aud: 'https://elsewhere.example/' }
+  };
+  const v = introspectionVerifier({
+    introspectionEndpoint: 'https://issuer.test/oauth2/introspect',
+    clientId: 'mcp',
+    clientSecret: 's',
+    resourceUrl: new URL('https://mcp.demo.datasafe.dev/mcp'),
+    serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info',
+    requireAudience: false,
+    fetchFn: (async (_u: unknown, init: { body: string }) =>
+      new Response(JSON.stringify(answers[new URLSearchParams(init.body).get('token')!]), { status: 200 })) as unknown as typeof fetch
+  });
+  assert.ok(await v.verifyAccessToken('noaud'));
+  await assert.rejects(v.verifyAccessToken('other'), /not issued for this MCP/);
+});
+
+test('introspectionVerifier: a stalled introspection endpoint times out', async () => {
+  const v = introspectionVerifier({
+    introspectionEndpoint: 'https://issuer.test/oauth2/introspect',
+    clientId: 'mcp',
+    clientSecret: 's',
+    resourceUrl: new URL('https://mcp.demo.datasafe.dev/mcp'),
+    serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info',
+    timeoutMs: 20,
+    fetchFn: ((_u: unknown, init: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason));
+    })) as unknown as typeof fetch
+  });
+  await assert.rejects(v.verifyAccessToken('any'), /TimeoutError|timed out|aborted/i);
 });
 
 test('introspectionVerifier: requireAudience refuses a token without aud, accepts the right one', async () => {

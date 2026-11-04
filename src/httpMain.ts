@@ -18,10 +18,15 @@ const publicUrl = new URL(required('HDS_MCP_PUBLIC_URL'));
 const serviceInfoUrl = resolveServiceInfoUrl(process.env.HDS_MCP_SERVICE_INFO ?? 'demo');
 const port = Number(process.env.PORT ?? 3000);
 
-const metaRes = await fetch(`${issuer}/.well-known/oauth-authorization-server`);
+const metaRes = await fetch(`${issuer}/.well-known/oauth-authorization-server`, { signal: AbortSignal.timeout(10_000) });
 if (!metaRes.ok) throw new Error(`Cannot read the authorization server metadata of ${issuer}: HTTP ${metaRes.status}`);
 const oauthMetadata = await metaRes.json() as OAuthMetadata & { introspection_endpoint?: string };
 if (!oauthMetadata.introspection_endpoint) throw new Error(`${issuer} publishes no introspection endpoint`);
+// The MCP posts its client secret there: https, on the issuer's own host only.
+const introspectUrl = new URL(oauthMetadata.introspection_endpoint);
+if (introspectUrl.protocol !== 'https:' || introspectUrl.host !== new URL(issuer).host) {
+  throw new Error(`${issuer} publishes an introspection endpoint off its own https host: ${introspectUrl.href}`);
+}
 
 const methods = httpMethods(publicUrl.pathname);
 const obs = await initHttpObservability(process.env, String(version), methods);
@@ -42,8 +47,8 @@ const app = createHttpApp({
     clientSecret: required('HDS_MCP_INTROSPECT_CLIENT_SECRET'),
     resourceUrl: publicUrl,
     serviceInfoUrl,
-    // Set once the core echoes `aud` (rc.70, plan 115 item 1) and the connector rows carry --audience.
-    requireAudience: process.env.HDS_MCP_REQUIRE_AUDIENCE === 'true'
+    // On by default (plan 115 review S-3); `false` only for a core older than rc.70 or rows without --audience.
+    requireAudience: process.env.HDS_MCP_REQUIRE_AUDIENCE !== 'false'
   })
 });
 const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}`));

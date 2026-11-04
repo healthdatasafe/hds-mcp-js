@@ -12,9 +12,10 @@ export interface IntrospectionConfig {
   // This MCP's public URL: a token whose `aud` names another resource is refused.
   resourceUrl: URL;
   serviceInfoUrl: string;
-  // Refuse a token that carries no `aud` (once the core binds tokens to this resource).
+  // Refuse a token that carries no `aud` (default; plan 115 review S-3).
   requireAudience?: boolean;
   cacheMs?: number;
+  timeoutMs?: number;
   fetchFn?: typeof fetch;
 }
 
@@ -41,6 +42,7 @@ function audienceMatches (aud: string | string[] | undefined, resource: URL): bo
 export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVerifier {
   const cache = new Map<string, { info: AuthInfo; until: number }>();
   const cacheMs = cfg.cacheMs ?? 60_000;
+  const requireAudience = cfg.requireAudience ?? true;
   const doFetch = cfg.fetchFn ?? fetch;
   const basic = 'Basic ' + Buffer.from(`${encodeURIComponent(cfg.clientId)}:${encodeURIComponent(cfg.clientSecret)}`).toString('base64');
 
@@ -53,7 +55,8 @@ export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVeri
       const res = await doFetch(cfg.introspectionEndpoint, {
         method: 'POST',
         headers: { authorization: basic, 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ token }).toString()
+        body: new URLSearchParams({ token }).toString(),
+        signal: AbortSignal.timeout(cfg.timeoutMs ?? 10_000)
       });
       if (!res.ok) {
         safeLog(`introspection failed: HTTP ${res.status} (is the MCP registered with --can-introspect?)`);
@@ -61,10 +64,11 @@ export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVeri
       }
       const body = await res.json() as IntrospectionResponse;
       if (!body.active) throw new InvalidTokenError('Token is not active');
-      if (cfg.requireAudience && body.aud == null) throw new InvalidTokenError('Token was not issued for this MCP server');
+      if (requireAudience && body.aud == null) throw new InvalidTokenError('Token was not issued for this MCP server');
       if (!audienceMatches(body.aud, cfg.resourceUrl)) throw new InvalidTokenError('Token was not issued for this MCP server');
       if (!body.api_base) throw new InvalidTokenError('Token carries no API base');
       const api = new URL(body.api_base);
+      if (api.protocol !== 'https:') throw new InvalidTokenError('Token carries a non-https API base');
       if (isProdHost(api.href)) throw new InvalidTokenError('The remote HDS MCP is not available for production accounts yet');
       api.username = token;
 

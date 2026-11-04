@@ -190,7 +190,10 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   `authorizationServer`, connector `clients` from `HDS_MCP_CONNECTOR_CLIENTS="claude=…,chatgpt=…"`), public and
   CORS-open. A core lists this server's base URL in `/service/info` `adapters`; the account app reads the manifest to
   show the user their URL. Gated: nothing lists it until CIMD (perki).
-- `HDS_MCP_REQUIRE_AUDIENCE=true` refuses tokens without `aud` (switch on with rc.70 + `--audience` rows).
+- Tokens without `aud` are refused by default (since 0.7.2); `HDS_MCP_REQUIRE_AUDIENCE=false` accepts them, only for a
+  core older than rc.70 or rows without `--audience`. A foreign `aud` is always refused.
+- Outbound hardening (0.7.2): 10 s timeout on the AS metadata and introspection calls; the introspection endpoint
+  (where the client secret goes) must be https on the issuer's host; `api_base` must be https.
 - `HDS_MCP_SCOPES` (space-separated) is published as `scopes_supported`: the default a client asks for when it names
   no scope (Claude Code). Demo: `offline_access` + `hds/stream/<root>.read` on the 17 connector-row roots (perki,
   read-only default).

@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+Hardening from the plan 115 Fable security review (2026-11-04, S-3 and S-8).
+
+### Changed
+- A token whose introspection carries no `aud` is refused by default. `HDS_MCP_REQUIRE_AUDIENCE=false` restores the
+  old behaviour (a core older than rc.70, or connector rows without `--audience`); `true` or unset = refuse.
+
+### Security
+- 10 s timeout on the authorization server metadata fetch and on every introspection call, so a stalled core cannot
+  pin sockets.
+- The introspection endpoint, where the client secret is posted, must be https on the issuer's own host; startup
+  fails otherwise.
+- `api_base` from introspection must be https.
+
 ## [0.8.0] - 2026-11-04
 
 ### Changed
