@@ -34,7 +34,11 @@ export function getServiceInfoUrl (): string | null {
 
 export function getApiEndpoint (): string {
   const req = requestCredentials.getStore();
-  if (req) return req.apiEndpoint;
+  if (req) {
+    // Raw mode before sign-in: an empty endpoint, never the stdio globals.
+    if (!req.apiEndpoint) throw new Error('Not connected. Call connect and have the person sign in first.');
+    return req.apiEndpoint;
+  }
   if (currentApiEndpoint == null) {
     throw new Error('Not connected. Run the `hds.connect` tool first.');
   }
@@ -54,5 +58,6 @@ export function clearApiEndpoint (): void {
 }
 
 export function isConnected (): boolean {
-  return requestCredentials.getStore() != null || currentApiEndpoint != null;
+  const req = requestCredentials.getStore();
+  return req ? Boolean(req.apiEndpoint) : currentApiEndpoint != null;
 }

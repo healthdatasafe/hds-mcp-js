@@ -64,7 +64,11 @@ export async function searchItemsHandler (
 
   if (top.length === 0) {
     return {
-      content: [{ type: 'text', text: `No HDS items matched "${query}" (${packLabel(pack)}).` }]
+      content: [{
+        type: 'text',
+        text: `No HDS items matched "${query}" (${packLabel(pack)}). Try other words or a code; if nothing fits, ` +
+          'tell the user, do not invent a type, and offer report_missing_item.'
+      }]
     };
   }
 

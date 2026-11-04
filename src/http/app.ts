@@ -9,6 +9,8 @@ import { runWithCredentials, type RequestCredentials } from '../auth/session.ts'
 import { safeLog } from '../lib/scrubber.ts';
 import { observabilityTiming, type HttpObservability } from './observability.ts';
 import { adapterBasePath } from './paths.ts';
+import { isWriteCall, missingWriteScopes } from './stepUp.ts';
+import { loadPack } from '../dataModel/pack.ts';
 
 export interface HttpAppConfig {
   publicUrl: URL;
@@ -21,6 +23,8 @@ export interface HttpAppConfig {
   connectorClients?: Record<string, string>;
   /** `scopes_supported` in the protected-resource metadata: what a client that names no scope asks for (MCP spec). */
   scopesSupported?: string[];
+  /** Raw mode (sign in by link, no OAuth), mounted at `<base>raw`; omitted or null when disabled. */
+  raw?: { mount (app: express.Express, path: string): void } | null;
 }
 
 /**
@@ -73,6 +77,7 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
     res.set('Access-Control-Allow-Origin', '*').json(manifest);
   });
   app.use(originCheck(cfg.allowedOrigins));
+  cfg.raw?.mount(app, `${base}raw`);
   app.use(mcpAuthMetadataRouter({
     oauthMetadata: cfg.oauthMetadata,
     resourceServerUrl: cfg.publicUrl,
@@ -88,6 +93,22 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
     const credentials = req.auth?.extra?.credentials as RequestCredentials | undefined;
     if (!credentials) {
       res.status(401).json({ error: 'no credentials' });
+      return;
+    }
+    // JSON-RPC batches left MCP in 2025-06-18; refusing them keeps every call visible to the step-up check.
+    if (Array.isArray(req.body)) {
+      res.status(400).json({ jsonrpc: '2.0', error: { code: -32600, message: 'Batch requests are not supported' }, id: null });
+      return;
+    }
+    // Step-up (MCP authorization, scope challenge): a write needs write consent on its data root; the client
+    // re-runs consent for the scopes named here (current ones kept, so reads are not lost).
+    const missing = isWriteCall(req.body) ? missingWriteScopes(req.body, req.auth?.scopes ?? [], await loadPack()) : [];
+    if (missing.length > 0) {
+      const scope = [...new Set([...(req.auth?.scopes ?? []), ...missing])].join(' ');
+      res.status(403).set('WWW-Authenticate',
+        `Bearer error="insufficient_scope", scope="${scope}", resource_metadata="${getOAuthProtectedResourceMetadataUrl(cfg.publicUrl)}", ` +
+        `error_description="Writing needs your consent to add data to: ${missing.join(', ')}"`)
+        .json({ error: 'insufficient_scope', scope });
       return;
     }
     // Stateless: a new server and transport per request, the user's credentials scoped to it.

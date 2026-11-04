@@ -3,6 +3,7 @@ import type { OAuthMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { createHttpApp } from './http/app.ts';
 import { exchangeVerifier } from './http/exchange.ts';
 import { introspectionVerifier } from './http/introspection.ts';
+import { rawMode } from './http/raw.ts';
 import { httpMethods, initHttpObservability } from './http/observability.ts';
 import { version } from './server.ts';
 import { resolveServiceInfoUrl } from './lib/hostPolicy.ts';
@@ -39,6 +40,12 @@ const verifierConfig = {
   serviceInfoUrl
 };
 
+// Raw mode (plan 118 RAW-MODE.md): sign in by link for clients without the connector OAuth. Off unless set.
+const raw = process.env.HDS_MCP_RAW === 'true'
+  // The sidecar route keeps the client's Host (create-sidecar.sh: `proxy_set_header Host $http_host`).
+  ? rawMode({ serviceInfoUrl, allowedHosts: [publicUrl.host, `${publicUrl.hostname}:${publicUrl.port || 443}`] })
+  : null;
+
 const methods = httpMethods(publicUrl.pathname);
 const obs = await initHttpObservability(process.env, String(version), methods);
 
@@ -52,6 +59,7 @@ const app = createHttpApp({
   allowedOrigins: (process.env.HDS_MCP_ALLOWED_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean),
   // Space-separated, e.g. "offline_access hds/stream/body.read". Claude Code sends no scope and asks for these.
   scopesSupported: (process.env.HDS_MCP_SCOPES ?? '').split(/\s+/).filter(Boolean),
+  raw,
   verifier: tokenExchange
     ? exchangeVerifier({ ...verifierConfig, tokenEndpoint: secretEndpoint })
     : introspectionVerifier({
@@ -61,10 +69,10 @@ const app = createHttpApp({
       requireAudience: process.env.HDS_MCP_REQUIRE_AUDIENCE !== 'false'
     })
 });
-const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}, ${tokenExchange ? 'token exchange' : 'introspection'}`));
+const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}, ${tokenExchange ? 'token exchange' : 'introspection'}${raw ? ', raw mode on' : ''}`));
 
-// Flush the last telemetry window on a Dokku stop / redeploy.
+// Flush the last telemetry window on a Dokku stop / redeploy; raw mode deletes the accesses it holds.
 process.once('SIGTERM', () => {
   server.close();
-  (obs ? obs.stop() : Promise.resolve()).finally(() => process.exit(0));
+  Promise.allSettled([raw?.closeAll(), obs?.stop()]).finally(() => process.exit(0));
 });

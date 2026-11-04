@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+### Added
+- `get_import_guide`: how to import someone's medical history (overview, lab reports, letters, photos,
+  spreadsheets, app exports, and what to do when no item fits), from the agent docs and the data-model docs. The
+  server instructions point to it.
+- `report_missing_item`: a prefilled data-model-gap issue link on site-agents for the person to post; it carries
+  the kind of data, unit and codes, never their values. No-match answers of `search_items` offer it.
+- Remote MCP: step-up. A write (`create_event`, `import_batch`) to a data root the token can only read answers
+  403 `insufficient_scope` naming `hds/stream/<root>.contribute`, so the client asks the person for write
+  consent on that root at the first write.
+- Remote MCP: raw mode (`HDS_MCP_RAW=true`, at `<base>raw`): for clients without the connector OAuth. `connect`
+  returns the platform's sign-in link; the session then holds an access to every data root (manage, genetics left
+  out) that the core expires after 4 h; `connect_status`, `disconnect` (deletes the access). The accepted access
+  is verified before use, and the token comes through a one-time shared secret.
+
+### Fixed
+- `search_items` description lists every code system it searches (ICD-10 and ICF too).
+
 ## [0.10.0] - 2026-11-04
 
 ### Added

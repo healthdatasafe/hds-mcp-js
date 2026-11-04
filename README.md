@@ -1,6 +1,6 @@
 # hds-mcp
 
-> **Status: v0.2.0 — production access when you're ready.** One-line
+> **Status: v0.11.0 — production access when you're ready.** One-line
 > install (`npx -y github:healthdatasafe/hds-mcp-js`), demo sandbox by
 > default, and now a per-session opt-in for writing to your real
 > production account — you ask for it explicitly, the agent passes
@@ -176,13 +176,16 @@ next session starts back in the safe state.
 **"auth timed out — please re-run hds.connect"**
 - You took longer than 5 minutes to complete the sign-in. Re-run the tool.
 
-**Anything else** — please [open an issue](https://github.com/healthdatasafe/hds-mcp-js/issues).
+**Anything else** — please [open an issue on `site-agents`](https://github.com/healthdatasafe/site-agents/issues/new/choose),
+the single tracker for agent problems and data-model gaps (`report_missing_item` prepares a gap report for you).
 
 ---
 
 ## Roadmap
 
-- **v0.4.0 (current)**: imports done safely: `connect` can ask for only
+- **v0.5.0 to v0.11.0**: a remote MCP over HTTP (OAuth connector, demo only for now), running as a sidecar
+  behind each HDS core; `report_missing_item`; import guides (`get_import_guide`). See the CHANGELOG.
+- **v0.4.0**: imports done safely: `connect` can ask for only
   the kinds of data an import needs, under the import's own name; read
   back, fix (`update_event`) or remove (`delete_events`, with a preview)
   everything an import wrote.
@@ -209,7 +212,8 @@ next session starts back in the safe state.
   `hds-forms-js`, tiered (essential / extended / advanced).
 - **v1** — published to the MCP registry. (The production-write gate-flip
   originally slated here shipped early, as the v0.1.0 per-session opt-in.)
-- **after v1** — hosted MCP endpoint; in-repo Claude Code app-dev scaffold.
+- **after v1** — in-repo Claude Code app-dev scaffold. (The hosted MCP endpoint shipped early: remote MCP per core,
+  demo first.)
 
 ---
 

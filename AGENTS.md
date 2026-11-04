@@ -175,7 +175,7 @@ underlying error body shape is
 ## Remote transport (preview, plan 118)
 
 `hds-mcp-http` serves the same tools (minus `connect`) over Streamable HTTP, for a deployment next to one HDS core
-(`mcp.<core-domain>`). Environment: `HDS_MCP_ISSUER` (the core's OAuth issuer), `HDS_MCP_PUBLIC_URL` (this
+(a sidecar at `<core domain>/adapter/mcp/`, see below). Environment: `HDS_MCP_ISSUER` (the core's OAuth issuer), `HDS_MCP_PUBLIC_URL` (this
 server's MCP URL, also the expected token audience), `HDS_MCP_INTROSPECT_CLIENT_ID` / `_SECRET` (a confidential
 registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default), `HDS_MCP_ALLOWED_ORIGINS`, `PORT`.
 
@@ -210,6 +210,14 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   no scope (Claude Code). Demo: `offline_access` + `hds/stream/<root>.read` on the 17 connector-row roots (perki,
   read-only default).
 - Not offered over HTTP: `connect` (OAuth signs in) and `ensure_streams` (no grant carries `manage`).
+- **Step-up** ([`src/http/stepUp.ts`](src/http/stepUp.ts)): before the transport, a `create_event` / `import_batch`
+  whose target root the token cannot write gets 403 `insufficient_scope` with `scope` = current scopes plus
+  `hds/stream/<root>.contribute` (plan 118 D-J3). Streams outside the model are left to the core.
+- **Raw mode** ([`src/http/raw.ts`](src/http/raw.ts), `HDS_MCP_RAW=true`, at `<base>raw`; design and review:
+  plan 118 RAW-MODE.md): the one stateful part. Sessions live in memory (a restart signs everyone out); the
+  session id is the bearer of an app access, so: verify the accepted access, one-time hand-off, `expireAfter`,
+  no host argument, never log sign-in or poll URLs, never return a token to the model. Raw `connect` /
+  `connect_status` / `disconnect` are added through `buildServer({ extraTools })`.
 
 **Deploy.** CI-built image `ghcr.io/healthdatasafe/hds-mcp-js` (built on a `vX.Y.Z` tag by
 `.github/workflows/build-image.yml`, deployed with `infra/dev-deploy/dokku/deploy-image.sh`), running

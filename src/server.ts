@@ -14,6 +14,8 @@ import { searchDatasetInput, searchDatasetHandler } from './tools/searchDataset.
 import { ensureStreamsInput, ensureStreamsHandler } from './tools/ensureStreams.ts';
 import { updateEventInput, updateEventHandler } from './tools/updateEvent.ts';
 import { deleteEventsInput, deleteEventsHandler } from './tools/deleteEvents.ts';
+import { reportMissingItemInput, reportMissingItemHandler } from './tools/reportMissingItem.ts';
+import { getImportGuideInput, getImportGuideHandler } from './tools/getImportGuide.ts';
 import { scrubError } from './lib/scrubber.ts';
 
 function wrap<T> (handler: (a: T) => Promise<any>) {
@@ -38,13 +40,17 @@ export const { name: packageName, version } = JSON.parse(
 // http: the remote transport, where the user signs in through OAuth before the first call, so there is no connect.
 const PRIVACY_DISCLOSURE = 'Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).';
 
-export function buildServer ({ http = false }: { http?: boolean } = {}): McpServer {
+export function buildServer (
+  { http = false, extraTools }: { http?: boolean; extraTools?: (server: McpServer) => void } = {}
+): McpServer {
   const server = new McpServer({
     name: 'hds-mcp',
     version
   }, {
     instructions: 'Health Data Safe (HDS) account tools. ' + PRIVACY_DISCLOSURE +
-      ' Always look data up in the HDS data model (search_items, get_item) before writing it.'
+      ' Always look data up in the HDS data model (search_items, get_item) before writing it.' +
+      ' To import someone\'s medical history (documents, lab reports, photos, spreadsheets, app exports), read get_import_guide first.' +
+      ' When no item fits their data, tell them and offer report_missing_item.'
   });
 
   if (!http) {
@@ -110,7 +116,7 @@ export function buildServer ({ http = false }: { http?: boolean } = {}): McpServ
 
   server.tool(
     'search_items',
-    'Search the HDS data-model for items (the canonical, human-meaningful unit: a streamId + eventType + content shape). Use this BEFORE create_event or import_batch to find the right item. Searches labels in every language the model has (English, French), and terminology codes: a LOINC or SNOMED-CT code finds the item that owns it (use the item, not a generic lab result, when one does). Deprecated items are hidden unless asked for. If a search returns no match for the user\'s data, surface that to the user — do not fall back to inventing types.',
+    'Search the HDS data-model for items (the canonical, human-meaningful unit: a streamId + eventType + content shape). Use this BEFORE create_event or import_batch to find the right item. Searches labels in every language the model has (English, French), and terminology codes: a LOINC, SNOMED-CT, ICD-10 or ICF code finds the item that owns it (use the item, not a generic lab result, when one does). Deprecated items are hidden unless asked for. If a search returns no match for the user\'s data, surface that to the user — do not fall back to inventing types — and offer report_missing_item.',
     searchItemsInput,
     wrap(searchItemsHandler)
   );
@@ -150,5 +156,21 @@ export function buildServer ({ http = false }: { http?: boolean } = {}): McpServ
     wrap(searchDatasetHandler)
   );
 
+  server.tool(
+    'get_import_guide',
+    'How to import a person\'s medical history (documents, lab reports, photos, spreadsheets, app exports) into HDS: the steps, the rules for each source type, and what to do when no item fits. Call it with no topic before the first import, then with the topic of each source. No account needed.',
+    getImportGuideInput,
+    wrap(getImportGuideHandler)
+  );
+
+  server.tool(
+    'report_missing_item',
+    'When no HDS item fits the user\'s data (search_items found nothing suitable), prepare a report asking HDS to add one: returns a prefilled GitHub issue link (site-agents, data-model gap) for the user to open and post themselves; nothing is sent by this tool. Offer it to the user, and put only the kind of data, its unit and known codes in it: never their values, names, dates or file names.',
+    reportMissingItemInput,
+    wrap(reportMissingItemHandler)
+  );
+
+  // Raw HTTP mode adds its own connect / connect_status / disconnect.
+  extraTools?.(server);
   return server;
 }
