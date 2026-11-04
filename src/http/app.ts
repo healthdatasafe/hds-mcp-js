@@ -11,6 +11,7 @@ import { observabilityTiming, type HttpObservability } from './observability.ts'
 import { adapterBasePath } from './paths.ts';
 import { isWriteCall, missingWriteScopes } from './stepUp.ts';
 import { loadPack } from '../dataModel/pack.ts';
+import type { Platform } from '../lib/hostPolicy.ts';
 
 export interface HttpAppConfig {
   publicUrl: URL;
@@ -23,6 +24,8 @@ export interface HttpAppConfig {
   connectorClients?: Record<string, string>;
   /** `scopes_supported` in the protected-resource metadata: what a client that names no scope asks for (MCP spec). */
   scopesSupported?: string[];
+  /** The HDS platform this MCP serves (from its service info): told to the model and named in the manifest. */
+  platform?: Platform;
   /** Raw mode (sign in by link, no OAuth), mounted at `<base>raw`; omitted or null when disabled. */
   raw?: { mount (app: express.Express, path: string): void } | null;
 }
@@ -31,7 +34,7 @@ export interface HttpAppConfig {
  * Pryv adapter manifest (adapter contract §3): the core lists this server's base URL in /service/info `adapters`,
  * and clients (e.g. the account app's "use HDS with your AI assistant" page) read the details here.
  */
-export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMetadata' | 'connectorClients' | 'raw'>) {
+export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMetadata' | 'connectorClients' | 'raw' | 'platform'>) {
   return {
     name: packageName,
     type: 'mcp',
@@ -45,6 +48,7 @@ export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMe
     protectedResourceMetadata: getOAuthProtectedResourceMetadataUrl(cfg.publicUrl),
     authorizationServer: cfg.oauthMetadata.issuer,
     clients: cfg.connectorClients ?? {},
+    ...(cfg.platform ? { platform: cfg.platform } : {}),
     // Raw mode: sign in by link, no client ID (only when enabled).
     ...(cfg.raw ? { rawEndpoint: new URL(`${adapterBasePath(cfg.publicUrl.pathname)}raw`, cfg.publicUrl).href } : {})
   };
@@ -114,7 +118,7 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
       return;
     }
     // Stateless: a new server and transport per request, the user's credentials scoped to it.
-    const server = buildServer({ http: true });
+    const server = buildServer({ http: true, platform: cfg.platform });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       transport.close().catch(() => {});

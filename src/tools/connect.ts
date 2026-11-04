@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { resolveServiceInfoUrl } from '../lib/hostPolicy.ts';
+import { platformNote, platformOf, resolveServiceInfoUrl } from '../lib/hostPolicy.ts';
 import { setApiEndpoint } from '../auth/session.ts';
 import { runAuthFlow, APP_ID, type RequestedPermission } from '../auth/pryvAuth.ts';
 import { loadPack, localized } from '../dataModel/pack.ts';
@@ -63,8 +63,8 @@ export async function connectHandler (
   return {
     content: [{
       type: 'text',
-      text: `Connected as ${username} (${new URL(apiEndpoint).hostname}) with app access "${appId}". ` +
-        `Access: ${scope}.${prodWriteNote}`
+      text: `Connected as ${username} on the HDS ${platformOf(apiEndpoint)} platform (${new URL(apiEndpoint).hostname}) ` +
+        `with app access "${appId}". Access: ${scope}.${prodWriteNote} ${platformNote(platformOf(apiEndpoint))}`
     }]
   };
 }

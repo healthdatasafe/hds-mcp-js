@@ -6,7 +6,7 @@ import { introspectionVerifier } from './http/introspection.ts';
 import { rawMode } from './http/raw.ts';
 import { httpMethods, initHttpObservability } from './http/observability.ts';
 import { version } from './server.ts';
-import { resolveServiceInfoUrl } from './lib/hostPolicy.ts';
+import { platformOf, resolveServiceInfoUrl } from './lib/hostPolicy.ts';
 import { safeLog } from './lib/scrubber.ts';
 
 function required (name: string): string {
@@ -60,6 +60,7 @@ const app = createHttpApp({
   // Space-separated, e.g. "offline_access hds/stream/body.read". Claude Code sends no scope and asks for these.
   scopesSupported: (process.env.HDS_MCP_SCOPES ?? '').split(/\s+/).filter(Boolean),
   raw,
+  platform: platformOf(serviceInfoUrl),
   verifier: tokenExchange
     ? exchangeVerifier({ ...verifierConfig, tokenEndpoint: secretEndpoint })
     : introspectionVerifier({

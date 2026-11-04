@@ -62,10 +62,35 @@ test('get_import_guide: overview by default, every topic has content, tools name
   const { GUIDE_TOPICS } = await import('../src/guides/content.ts');
   const { buildServer } = await import('../src/server.ts');
   assert.match((await getImportGuideHandler({})).content[0].text, /^# Importing/);
-  const tools = Object.keys((buildServer() as any)._registeredTools);
+  // stdio tools plus the raw-mode ones (the guides cover both transports).
+  const tools = [...Object.keys((buildServer() as any)._registeredTools), 'connect_status', 'disconnect'];
   for (const topic of GUIDE_TOPICS) {
     const text = (await getImportGuideHandler({ topic })).content[0].text;
     assert.ok(text.length > 200, topic);
     for (const name of text.match(/\b[a-z]+(?:_[a-z]+)+(?=\()/g) ?? []) assert.ok(tools.includes(name), `${topic} names ${name}`);
   }
+});
+
+test('get_connection: names the platform and suggests a throwaway demo account', async () => {
+  const { getConnectionHandler } = await import('../src/tools/getConnection.ts');
+  const { runWithCredentials } = await import('../src/auth/session.ts');
+  const { platformOf } = await import('../src/lib/hostPolicy.ts');
+  assert.equal(platformOf('https://reg.api.datasafe.dev/service/info'), 'production');
+  assert.equal(platformOf('https://auth-ch.api.datasafe.dev'), 'production');
+  assert.equal(platformOf('https://demo.datasafe.dev/reg/service/info'), 'demo');
+  const demo = await runWithCredentials({ apiEndpoint: 'https://tok@demo.datasafe.dev/alice/', serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info', prodWritesEnabled: false },
+    () => getConnectionHandler());
+  assert.match(demo.content[0].text, /Connected to the HDS demo platform/);
+  assert.match(demo.content[0].text, /demo-account\.datasafe\.dev\/register/);
+  const prod = await runWithCredentials({ apiEndpoint: '', serviceInfoUrl: 'https://reg.api.datasafe.dev/service/info', prodWritesEnabled: false },
+    () => getConnectionHandler());
+  assert.match(prod.content[0].text, /Not connected yet; this session uses the HDS production platform.*real health record/);
+});
+
+test('server instructions name the platform of a remote MCP', async () => {
+  const { buildServer } = await import('../src/server.ts');
+  const instructions = (s: any) => s.server._instructions as string;
+  assert.match(instructions(buildServer({ http: true, platform: 'demo' })), /HDS demo platform/);
+  assert.match(instructions(buildServer({ http: true, platform: 'production' })), /production platform/);
+  assert.match(instructions(buildServer()), /get_connection/);
 });

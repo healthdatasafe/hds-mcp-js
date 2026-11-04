@@ -22,6 +22,12 @@ Reference: https://agents.datasafe.dev/llms-full.txt (§3 items, §5f imports, �
 - They choose what gets imported and can stop at any point.
 Say it again before the first read of a production (real) account.
 
+## 1b. Demo or production: say which, and suggest a trial on demo
+get_connection() tells which platform this session uses. Production holds their real record;
+demo is a test platform that can be wiped. To see how it works first, suggest a throwaway demo
+account (https://demo-account.datasafe.dev/register, made-up details) and a trial with made-up
+values, never their real records; then the real import on production.
+
 ## 2. Inventory
 Ask what they have (lab reports, letters, photos of documents, spreadsheets, app exports) and
 which to import. One source type at a time. They attach files to the chat and you read them:
@@ -33,8 +39,9 @@ attachment this MCP cannot upload): say so; store the values you extract, they k
   (list_model_streams). importName: the <tool> part of every sourceKey. Tell the patient which
   kinds of data and which level before sign-in, then ensure_streams({ items }) before writing.
   Production writes: connect({ host: "prod", enableWrites: true, ... }), only if they asked.
-- Remote connector: no connect, no ensure_streams. The patient signed in through the connector;
-  their client asks them for write consent on each data root at the first write.
+- Remote connector: no ensure_streams. The patient signed in through the connector; their client
+  asks them for write consent on each data root at the first write. Raw address (.../raw, no
+  client ID): connect() gives a sign-in link for them to open, then connect_status().
 
 ## 4. Item first
 For each kind of data: search_items, then get_item; use its streamId, eventType and content

@@ -16,6 +16,8 @@ import { updateEventInput, updateEventHandler } from './tools/updateEvent.ts';
 import { deleteEventsInput, deleteEventsHandler } from './tools/deleteEvents.ts';
 import { reportMissingItemInput, reportMissingItemHandler } from './tools/reportMissingItem.ts';
 import { getImportGuideInput, getImportGuideHandler } from './tools/getImportGuide.ts';
+import { getConnectionInput, getConnectionHandler } from './tools/getConnection.ts';
+import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
 
 function wrap<T> (handler: (a: T) => Promise<any>) {
@@ -41,7 +43,7 @@ export const { name: packageName, version } = JSON.parse(
 const PRIVACY_DISCLOSURE = 'Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).';
 
 export function buildServer (
-  { http = false, extraTools }: { http?: boolean; extraTools?: (server: McpServer) => void } = {}
+  { http = false, extraTools, platform }: { http?: boolean; extraTools?: (server: McpServer) => void; platform?: Platform } = {}
 ): McpServer {
   const server = new McpServer({
     name: 'hds-mcp',
@@ -50,7 +52,11 @@ export function buildServer (
     instructions: 'Health Data Safe (HDS) account tools. ' + PRIVACY_DISCLOSURE +
       ' Always look data up in the HDS data model (search_items, get_item) before writing it.' +
       ' To import someone\'s medical history (documents, lab reports, photos, spreadsheets, app exports), read get_import_guide first.' +
-      ' When no item fits their data, tell them and offer report_missing_item.'
+      ' When no item fits their data, tell them and offer report_missing_item.' +
+      // The remote MCP serves one platform; stdio connects to demo unless asked for prod.
+      (platform
+        ? ` ${platformNote(platform)} Tell the person which platform this is before the first read.`
+        : ' connect uses the demo platform unless the person asks for production; call get_connection to tell them which one they are on.')
   });
 
   if (!http) {
@@ -154,6 +160,13 @@ export function buildServer (
     'Search an HDS dataset (from list_datasources) for a coded entry, e.g. a diagnosis for condition-coded or a drug for medication-intake-coded, and get its label, codes (SNOMED-CT, ATC, RxNorm, …) and hdsId to store unchanged in the item\'s content. The search text is sent to the HDS datasets service of the connected platform (demo when not connected); tell the user when the text names their condition or medication. The lists are curated and incomplete: on no match, tell the user, never invent a code.',
     searchDatasetInput,
     wrap(searchDatasetHandler)
+  );
+
+  server.tool(
+    'get_connection',
+    'Which HDS platform this session uses (production = the person\'s real health record; demo = a test platform for trying things out with a throwaway account) and whether it is connected. Tell the person before the first read or write.',
+    getConnectionInput,
+    wrap(getConnectionHandler)
   );
 
   server.tool(

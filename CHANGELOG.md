@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- `get_connection`: which HDS platform the session uses (production = the person's real record; demo = a test
+  platform) and whether it is connected. The remote MCP's server instructions and manifest (`platform`) name its
+  platform; `connect` and raw `connect_status` name it too. The guidance suggests a throwaway demo account with
+  made-up values to try things out (https://demo-account.datasafe.dev/register), never real records.
+
 ## [0.12.0] - 2026-11-04
 
 ### Added

@@ -7,7 +7,7 @@ import { buildServer } from '../server.ts';
 import { runWithCredentials, type RequestCredentials } from '../auth/session.ts';
 import type { RequestedPermission } from '../auth/pryvAuth.ts';
 import { allDataPermissions } from '../tools/connect.ts';
-import { isProdHost } from '../lib/hostPolicy.ts';
+import { isProdHost, platformOf } from '../lib/hostPolicy.ts';
 import { safeLog } from '../lib/scrubber.ts';
 
 /**
@@ -179,7 +179,8 @@ export function rawMode (cfg: RawConfig) {
         s.credentials = undefined;
         return 'This session has ended; reconnect.';
       }
-      return `Connected as ${s.username}. Tell the person this account name so they can check it is theirs.`;
+      return `Connected as ${s.username} on the HDS ${platformOf(s.credentials!.apiEndpoint)} platform. Tell the person ` +
+        'this account name and platform so they can check it is the account they meant.';
     }
     return 'Still waiting for the person to sign in and accept.';
   }
@@ -260,7 +261,7 @@ export function rawMode (cfg: RawConfig) {
   function newSession (): Session {
     const s = {} as Session;
     s.created = s.lastSeen = Date.now();
-    s.server = buildServer({ http: true, extraTools: rawTools(() => s) });
+    s.server = buildServer({ http: true, extraTools: rawTools(() => s), platform: platformOf(cfg.serviceInfoUrl) });
     s.transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomBytes(32).toString('base64url'),
       enableJsonResponse: true,
