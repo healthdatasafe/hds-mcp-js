@@ -81,6 +81,8 @@ test('raw: sign in by link, verified access, tools run as the person, disconnect
   const t = await start();
   try {
     assert.ok(t.sid());
+    const manifest = await (await fetch(t.url.replace('/raw', '/manifest.json'))).json() as Record<string, unknown>;
+    assert.equal(manifest.rawEndpoint, 'http://127.0.0.1/adapter/mcp/raw');
     const names = (await t.rpc('tools/list')).body.result.tools.map((x: any) => x.name);
     for (const n of ['connect', 'connect_status', 'disconnect', 'get_import_guide', 'report_missing_item']) assert.ok(names.includes(n), n);
     assert.match(await t.tool('get_events'), /Not connected/);
@@ -110,6 +112,8 @@ test('raw: an accepted access that is not the one asked for is refused (account 
     await t.tool('connect');
     t.p.state.poll = 'ACCEPTED';
     assert.match(await t.tool('connect_status'), /could not be used: the accepted access is not the one this session asked for/);
+    // The token is discarded, so its access is deleted rather than left alive for 4 h.
+    assert.deepEqual(t.p.state.deleted, ['acc1']);
     assert.match(await t.tool('get_events'), /Not connected/);
   } finally { t.server.close(); }
 });
@@ -181,5 +185,19 @@ test('raw: disconnect tells the truth when the core refuses the delete; batches 
       r.end(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } } }));
     });
     assert.equal(foreign, 403);
+  } finally { t.server.close(); }
+});
+
+test('raw: closing the session (HTTP DELETE) revokes its access', async () => {
+  const t = await start();
+  try {
+    await t.tool('connect');
+    t.p.state.poll = 'ACCEPTED';
+    await t.tool('connect_status');
+    const res = await fetch(t.url, { method: 'DELETE', headers: { 'mcp-session-id': t.sid()! } });
+    assert.equal(res.status, 200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.deepEqual(t.p.state.deleted, ['acc1']);
+    assert.equal(t.raw.sessionCount(), 0);
   } finally { t.server.close(); }
 });

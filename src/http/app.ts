@@ -31,7 +31,7 @@ export interface HttpAppConfig {
  * Pryv adapter manifest (adapter contract §3): the core lists this server's base URL in /service/info `adapters`,
  * and clients (e.g. the account app's "use HDS with your AI assistant" page) read the details here.
  */
-export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMetadata' | 'connectorClients'>) {
+export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMetadata' | 'connectorClients' | 'raw'>) {
   return {
     name: packageName,
     type: 'mcp',
@@ -44,7 +44,9 @@ export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMe
     mcpEndpoint: cfg.publicUrl.href,
     protectedResourceMetadata: getOAuthProtectedResourceMetadataUrl(cfg.publicUrl),
     authorizationServer: cfg.oauthMetadata.issuer,
-    clients: cfg.connectorClients ?? {}
+    clients: cfg.connectorClients ?? {},
+    // Raw mode: sign in by link, no client ID (only when enabled).
+    ...(cfg.raw ? { rawEndpoint: new URL(`${adapterBasePath(cfg.publicUrl.pathname)}raw`, cfg.publicUrl).href } : {})
   };
 }
 

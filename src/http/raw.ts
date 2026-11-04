@@ -60,18 +60,18 @@ const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 export function rawMode (cfg: RawConfig) {
   const sessions = new Map<string, Session>();
   const doFetch = cfg.fetchFn ?? fetch;
-  const call = (url: string, init: RequestInit = {}) =>
-    doFetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(TIMEOUT_MS) });
+  const call = (url: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS) =>
+    doFetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
 
   const connectedCount = () => [...sessions.values()].filter((s) => s.credentials).length;
 
   /** Deletes an access with its own token; false when the core refused or did not answer. */
-  async function deleteAccess (apiEndpoint: string, accessId: string): Promise<boolean> {
+  async function deleteAccess (apiEndpoint: string, accessId: string, timeoutMs?: number): Promise<boolean> {
     const api = new URL(apiEndpoint);
     const token = decodeURIComponent(api.username);
     api.username = '';
     try {
-      const r = await call(`${api.href}accesses/${encodeURIComponent(accessId)}`, { method: 'DELETE', headers: { authorization: token } });
+      const r = await call(`${api.href}accesses/${encodeURIComponent(accessId)}`, { method: 'DELETE', headers: { authorization: token } }, timeoutMs);
       if (!r.ok) safeLog(`raw: access revoke refused: HTTP ${r.status}`);
       return r.ok;
     } catch (err) {
@@ -80,20 +80,20 @@ export function rawMode (cfg: RawConfig) {
     }
   }
 
-  async function revoke (s: Session): Promise<boolean> {
+  async function revoke (s: Session, timeoutMs?: number): Promise<boolean> {
     if (!s.credentials || !s.accessId) return true;
-    return deleteAccess(s.credentials.apiEndpoint, s.accessId);
+    return deleteAccess(s.credentials.apiEndpoint, s.accessId, timeoutMs);
   }
 
-  async function drop (id: string, s: Session) {
+  async function drop (id: string, s: Session, timeoutMs?: number) {
     sessions.delete(id);
-    await revoke(s);
+    await revoke(s, timeoutMs);
     s.transport.close().catch(() => {});
     s.server.close().catch(() => {});
   }
 
   /** Accepted credential: one-time retrieve, then checked to be exactly the access this session asked for. */
-  async function adopt (s: Session, body: any) {
+  async function adopt (s: Session, pending: Pending, body: any) {
     let apiEndpoint: string;
     if (body.handoff?.key) {
       const tokenless = new URL(body.apiEndpoint);
@@ -110,30 +110,34 @@ export function rawMode (cfg: RawConfig) {
     }
     const api = new URL(apiEndpoint);
     if (api.protocol !== 'https:' || !api.username) throw new Error('sign-in returned an unusable API address');
-    if (isProdHost(api.href)) throw new Error('The remote HDS MCP is not available for production accounts yet');
     const token = decodeURIComponent(api.username);
     const bare = new URL(api.href);
     bare.username = '';
     const r = await call(`${bare.href}access-info`, { headers: { authorization: token } });
     if (!r.ok) throw new Error(`access check failed: HTTP ${r.status}`);
     const info = await r.json() as any;
-    const pending = s.pending!;
-    const asked = new Map(pending.permissions.map((p) => [p.streamId, p.level]));
-    // Feature permissions (e.g. selfRevoke) carry no streamId.
-    const got: Array<{ streamId: string; level: string }> = (info.permissions ?? []).filter((p: any) => p.streamId != null);
-    if (info.type !== 'app' || info.name !== RAW_APP_ID || info.deviceName !== pending.deviceName ||
-        got.length !== asked.size || !got.every((p) => asked.get(p.streamId) === p.level)) {
-      throw new Error('the accepted access is not the one this session asked for');
-    }
-    // A manage access must end on its own: refuse (and delete) one without the expiry this session asked for.
-    if (typeof info.expires !== 'number' || info.expires > Date.now() / 1000 + LIFETIME_MS / 1000 + 60) {
+    try {
+      if (isProdHost(api.href)) throw new Error('The remote HDS MCP is not available for production accounts yet');
+      const asked = new Map(pending.permissions.map((p) => [p.streamId, p.level]));
+      // Feature permissions (e.g. selfRevoke) carry no streamId.
+      const got: Array<{ streamId: string; level: string }> = (info.permissions ?? []).filter((p: any) => p.streamId != null);
+      if (info.type !== 'app' || info.name !== RAW_APP_ID || info.deviceName !== pending.deviceName ||
+          got.length !== asked.size || !got.every((p) => asked.get(p.streamId) === p.level)) {
+        throw new Error('the accepted access is not the one this session asked for');
+      }
+      // A manage access must end on its own: refuse one without the expiry this session asked for.
+      if (typeof info.expires !== 'number' || info.expires > Date.now() / 1000 + LIFETIME_MS / 1000 + 60) {
+        throw new Error('the accepted access has no expiry');
+      }
+    } catch (err) {
+      // The token is about to be discarded: delete its access so nothing consented outlives this refusal.
       if (info.id) await deleteAccess(apiEndpoint, info.id);
-      throw new Error('the accepted access has no expiry');
+      throw err;
     }
     s.credentials = { apiEndpoint, serviceInfoUrl: cfg.serviceInfoUrl, prodWritesEnabled: false };
     s.accessId = info.id;
     s.username = info.user?.username ?? body.username;
-    s.pending = undefined;
+    if (s.pending === pending) s.pending = undefined;
   }
 
   /** One poll of a pending sign-in; returns a sentence for the model. */
@@ -145,12 +149,14 @@ export function rawMode (cfg: RawConfig) {
   }
 
   async function pollOutcome (s: Session): Promise<string> {
-    if (!s.pending) return s.outcome ?? (s.credentials ? `Connected as ${s.username}.` : 'Not connected: call connect.');
-    if (Date.now() > s.pending.until) {
+    // Snapshot: a disconnect during this poll clears s.pending, the poll still finishes on its own request.
+    const pending = s.pending;
+    if (!pending) return s.outcome ?? (s.credentials ? `Connected as ${s.username}.` : 'Not connected: call connect.');
+    if (Date.now() > pending.until) {
       s.pending = undefined;
       return 'The sign-in link expired. Call connect again for a new one.';
     }
-    const r = await call(s.pending.pollUrl);
+    const r = await call(pending.pollUrl);
     if (!r.ok) return 'Still waiting for the person to sign in and accept.';
     const body = await r.json() as any;
     if (body.status === 'NEED_SIGNIN') return 'Still waiting for the person to sign in and accept.';
@@ -160,7 +166,7 @@ export function rawMode (cfg: RawConfig) {
     }
     if (body.status === 'ACCEPTED') {
       try {
-        await adopt(s, body);
+        await adopt(s, pending, body);
       } catch (err) {
         s.pending = undefined;
         safeLog(`raw: accepted access refused: ${(err as Error).message}`);
@@ -233,6 +239,8 @@ export function rawMode (cfg: RawConfig) {
         {},
         async () => {
           const s = getSession();
+          // A poll in flight may still adopt an access: let it finish so the answer is true.
+          if (s.polling) await s.polling.catch(() => {});
           const wasConnected = Boolean(s.credentials);
           const deleted = await revoke(s);
           s.credentials = undefined;
@@ -330,9 +338,10 @@ export function rawMode (cfg: RawConfig) {
       setInterval(() => { sweep().catch(() => {}); }, 60_000).unref();
     },
     sweep,
-    /** On shutdown: delete every access this process holds. */
+    /** On shutdown: delete every access this process holds, within Docker's stop grace (3 s each, 6 s in all). */
     async closeAll () {
-      await Promise.all([...sessions].map(([id, s]) => drop(id, s)));
+      const all = Promise.all([...sessions].map(([id, s]) => drop(id, s, 3000)));
+      await Promise.race([all, new Promise((resolve) => setTimeout(resolve, 6000).unref())]);
     },
     sessionCount: () => sessions.size
   };

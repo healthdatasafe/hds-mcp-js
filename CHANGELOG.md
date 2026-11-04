@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- The adapter manifest names the raw-mode address (`rawEndpoint`) when raw mode is on, so the account app's AI
+  assistant tab can offer it to assistants without a Client ID field.
+
+### Fixed
+- Raw mode: an access refused after its credential was retrieved (wrong app, device name, permissions, expiry or a
+  production host) is now deleted at the core, not left alive for 4 hours; a `disconnect` during a sign-in poll no
+  longer breaks it and waits for it to finish; shutdown revokes fit within the container's stop grace.
+
 ## [0.11.0] - 2026-11-04
 
 ### Added
