@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-04
+
 ### Added
 - `get_import_guide`: how to import someone's medical history (overview, lab reports, letters, photos,
   spreadsheets, app exports, and what to do when no item fits), from the agent docs and the data-model docs. The
