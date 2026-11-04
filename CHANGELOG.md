@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-04
+
 Hardening from the plan 115 Fable security review (2026-11-04, S-3 and S-8).
 
 ### Changed
