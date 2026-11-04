@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-04
+
+### Changed
+- `connect` with no `roots` no longer requests `*`. It requests one permission per data-model root at the asked
+  level, leaving out the roots the pack marks `explicitGrantOnly` (today `genetics`), which only `roots` naming them
+  can reach (site-agents#37). The sign-in creates any missing model root, as `roots` already did; streams outside
+  the data model are no longer covered by the default access. The reply names the excluded roots.
+
 ## [0.7.1] - 2026-11-03
 
 ### Added

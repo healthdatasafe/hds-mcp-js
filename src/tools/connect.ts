@@ -49,14 +49,17 @@ export async function connectHandler (
   }
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const serviceInfoUrl = resolveServiceInfoUrl(host);
-  const permissions = roots ? await rootPermissions(roots, level) : allDataPermission(level);
+  const all = roots ? null : await allDataPermissions(level);
+  const permissions = all ? all.permissions : await rootPermissions(roots!, level);
   const appId = importName ? `${APP_ID}-${importName}` : APP_ID;
   const { apiEndpoint, username } = await runAuthFlow(serviceInfoUrl, permissions, appId);
   setApiEndpoint(apiEndpoint, enableWrites === true, serviceInfoUrl);
   const prodWriteNote = enableWrites === true
     ? ' Production writes: enabled for this session.'
     : '';
-  const scope = permissions.map((p) => `${p.defaultName ?? p.streamId} (${p.level})`).join(', ');
+  const scope = all
+    ? `All HDS data${all.excluded.length > 0 ? ` except ${all.excluded.join(', ')}` : ''} (${permissions[0]?.level})`
+    : permissions.map((p) => `${p.defaultName ?? p.streamId} (${p.level})`).join(', ');
   return {
     content: [{
       type: 'text',
@@ -66,8 +69,24 @@ export async function connectHandler (
   };
 }
 
-function allDataPermission (level?: Level): RequestedPermission[] {
-  return [{ streamId: '*', level: level ?? 'contribute', defaultName: 'All HDS data' }];
+type PackRoot = { id: string; name?: string; label?: Record<string, string>; explicitGrantOnly?: boolean };
+
+const rootName = (s: PackRoot): string => (s.label ? localized(s.label, 'en') : s.name) ?? s.id;
+
+/**
+ * "All data" without `*`: one permission per data-model root, minus the roots marked
+ * `explicitGrantOnly` (genetics), which only an access naming them may reach (site-agents#37).
+ * Not `[{ '*' }, { genetics, none }]`: the core requires a `defaultName` on the mask and then
+ * creates the stream it masks (verified on demo, 2026-11-04).
+ */
+export async function allDataPermissions (level?: Level): Promise<{ permissions: RequestedPermission[]; excluded: string[] }> {
+  const pack = await loadPack();
+  const roots = (pack.streams ?? []) as PackRoot[];
+  return {
+    permissions: roots.filter((s) => s.explicitGrantOnly !== true)
+      .map((s) => ({ streamId: s.id, level: level ?? 'contribute', defaultName: rootName(s) })),
+    excluded: roots.filter((s) => s.explicitGrantOnly === true).map(rootName)
+  };
 }
 
 /** Per-root permissions, named from the data model so the consent screen and the account show plain names. */
@@ -79,8 +98,7 @@ export async function rootPermissions (
     throw new Error('roots must name streams; omit roots to request all data.');
   }
   const pack = await loadPack();
-  const modelRoots = new Map(((pack.streams ?? []) as Array<{ id: string; name?: string; label?: Record<string, string> }>)
-    .map((s) => [s.id, s.label ? localized(s.label, 'en') : s.name]));
+  const modelRoots = new Map(((pack.streams ?? []) as PackRoot[]).map((s) => [s.id, rootName(s)]));
   return roots.map((r) => ({
     streamId: r.streamId,
     level: r.level ?? level ?? 'manage',
