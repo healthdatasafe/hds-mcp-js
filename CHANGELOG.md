@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.1] - 2026-11-04
+
 ### Fixed
 - Raw mode: when the core falls back from the one-time hand-off to inline delivery with the token beside a token-less
   `apiEndpoint`, sign-in now works (it was refused); the access is verified as before.
