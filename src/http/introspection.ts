@@ -28,6 +28,15 @@ interface IntrospectionResponse {
   api_base?: string;
 }
 
+/** The credentials the tools use: `token` at the `api_base` the core returned (https, never a production host). */
+export function apiCredentials (apiBase: string, token: string, serviceInfoUrl: string): RequestCredentials {
+  const api = new URL(apiBase);
+  if (api.protocol !== 'https:') throw new InvalidTokenError('Token carries a non-https API base');
+  if (isProdHost(api.href)) throw new InvalidTokenError('The remote HDS MCP is not available for production accounts yet');
+  api.username = token;
+  return { apiEndpoint: api.href, serviceInfoUrl, prodWritesEnabled: false };
+}
+
 function audienceMatches (aud: string | string[] | undefined, resource: URL): boolean {
   if (aud == null) return true;
   const want = resource.href.replace(/#.*$/, '').replace(/\/$/, '');
@@ -56,6 +65,8 @@ export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVeri
         method: 'POST',
         headers: { authorization: basic, 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token }).toString(),
+        // A redirect would re-post the token off the issuer's host.
+        redirect: 'error',
         signal: AbortSignal.timeout(cfg.timeoutMs ?? 10_000)
       });
       if (!res.ok) {
@@ -67,16 +78,7 @@ export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVeri
       if (requireAudience && body.aud == null) throw new InvalidTokenError('Token was not issued for this MCP server');
       if (!audienceMatches(body.aud, cfg.resourceUrl)) throw new InvalidTokenError('Token was not issued for this MCP server');
       if (!body.api_base) throw new InvalidTokenError('Token carries no API base');
-      const api = new URL(body.api_base);
-      if (api.protocol !== 'https:') throw new InvalidTokenError('Token carries a non-https API base');
-      if (isProdHost(api.href)) throw new InvalidTokenError('The remote HDS MCP is not available for production accounts yet');
-      api.username = token;
-
-      const credentials: RequestCredentials = {
-        apiEndpoint: api.href,
-        serviceInfoUrl: cfg.serviceInfoUrl,
-        prodWritesEnabled: false
-      };
+      const credentials = apiCredentials(body.api_base, token, cfg.serviceInfoUrl);
       const info: AuthInfo = {
         token,
         clientId: body.client_id ?? 'unknown',
@@ -87,6 +89,7 @@ export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVeri
         extra: { credentials }
       };
       const until = Math.min(now + cacheMs, body.exp ? body.exp * 1000 : Infinity);
+      for (const [k, v] of cache) if (v.until <= now) cache.delete(k);
       cache.set(token, { info, until });
       return info;
     }

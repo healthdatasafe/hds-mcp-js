@@ -185,6 +185,12 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
 - **Spike token handling** (perki, 2026-11-02): the API is called with the same token at the `api_base` the core's
   introspection returns. The MCP spec forbids this passthrough; a separate credential through token exchange is a
   gate before production, and production `api_base` hosts are refused until then.
+- **Token exchange** (`HDS_MCP_TOKEN_EXCHANGE=true`, off by default; core design PY1 R7): instead of introspecting,
+  the MCP exchanges the connector's token at the core's `token_endpoint` (RFC 8693, `subject_token`, no scope
+  narrowing) and calls the API with the derived token at the returned `api_base`. Needs the `hds-mcp` row flagged
+  `--can-exchange` and the URN in the core's `oauth:grantTypesSupported`. `invalid_grant` / `invalid_target` → 401
+  with `resource_metadata`; any other refusal (row not flagged, suspended, 421 `wrong_core`, never followed) → 500
+  and a log line. Same 60 s cache, capped by `expires_in`.
 - One MCP per core: issuers are per core, and clients follow only the first `authorization_servers` entry.
 - **Discovery.** `GET /manifest.json` is the Pryv adapter manifest (`type: "mcp"`, `mcpEndpoint`,
   `authorizationServer`, connector `clients` from `HDS_MCP_CONNECTOR_CLIENTS="claude=…,chatgpt=…"`), public and

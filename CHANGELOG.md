@@ -2,6 +2,19 @@
 
 ## [Unreleased]
 
+### Added
+- `HDS_MCP_TOKEN_EXCHANGE=true` (off by default): the connector's token is exchanged at the core's token endpoint
+  (OAuth 2.0 Token Exchange, RFC 8693) for a derived token of the same grant, and the tools call the API with that
+  token instead of passing the connector's through. Needs a core with token exchange and the MCP's client row
+  flagged for it. Dead or foreign tokens answer 401 with `resource_metadata`; exchange faults on the server side
+  answer 500 and are logged.
+
+### Fixed
+- The token cache no longer keeps expired entries: they are dropped on each cache miss.
+
+### Security
+- Introspection and token exchange refuse redirects, so a token is never re-posted off the issuer's host.
+
 ## [0.8.1] - 2026-11-04
 
 Hardening from the plan 115 Fable security review (2026-11-04, S-3 and S-8).

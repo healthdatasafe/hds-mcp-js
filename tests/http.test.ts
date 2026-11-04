@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readFileSync } from 'node:fs';
-import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
+import { InvalidTokenError, ServerError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { createHttpApp } from '../src/http/app.ts';
+import { exchangeVerifier } from '../src/http/exchange.ts';
 import { introspectionVerifier } from '../src/http/introspection.ts';
 import { httpMethods, initHttpObservability } from '../src/http/observability.ts';
 
@@ -223,6 +224,121 @@ test('introspectionVerifier: requireAudience false accepts a token without aud, 
 test('introspectionVerifier: a stalled introspection endpoint times out', async () => {
   const v = introspectionVerifier({
     introspectionEndpoint: 'https://issuer.test/oauth2/introspect',
+    clientId: 'mcp',
+    clientSecret: 's',
+    resourceUrl: new URL('https://mcp.demo.datasafe.dev/mcp'),
+    serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info',
+    timeoutMs: 20,
+    fetchFn: ((_u: unknown, init: { signal: AbortSignal }) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => reject(init.signal.reason));
+    })) as unknown as typeof fetch
+  });
+  await assert.rejects(v.verifyAccessToken('any'), /TimeoutError|timed out|aborted/i);
+});
+
+type ExchangeAnswer = { status: number; body: unknown };
+const derivedOk = {
+  access_token: 'derived',
+  issued_token_type: 'urn:ietf:params:oauth:token-type:access_token',
+  token_type: 'Bearer',
+  expires_in: 1200,
+  scope: 'hds/stream/body.read',
+  api_base: 'https://alias1.demo.datasafe.dev/'
+};
+
+function exchangeWith (
+  answers: Record<string, ExchangeAnswer | (() => ExchangeAnswer)>,
+  seen: Array<{ auth: string; form: URLSearchParams; redirect?: string }> = [],
+  opts: { cacheMs?: number } = {}
+) {
+  return exchangeVerifier({
+    tokenEndpoint: 'https://issuer.test/oauth2/token',
+    clientId: 'mcp',
+    clientSecret: 's',
+    resourceUrl: new URL('https://mcp.demo.datasafe.dev/mcp'),
+    serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info',
+    ...opts,
+    fetchFn: (async (_u: unknown, init: { body: string; headers: Record<string, string>; redirect?: string }) => {
+      const form = new URLSearchParams(init.body);
+      seen.push({ auth: init.headers.authorization, form, redirect: init.redirect });
+      const entry = answers[form.get('subject_token')!];
+      const a = typeof entry === 'function' ? entry() : entry;
+      return new Response(typeof a.body === 'string' ? a.body : JSON.stringify(a.body), { status: a.status });
+    }) as unknown as typeof fetch
+  });
+}
+
+test('exchangeVerifier: exchanges the connector token, calls the API with the derived token, caches', async () => {
+  const seen: Array<{ auth: string; form: URLSearchParams; redirect?: string }> = [];
+  const v = exchangeWith({ subject: { status: 200, body: derivedOk } }, seen);
+  const info = await v.verifyAccessToken('subject');
+  assert.equal((info.extra!.credentials as { apiEndpoint: string }).apiEndpoint, 'https://derived@alias1.demo.datasafe.dev/');
+  assert.equal(info.token, 'subject', 'the derived token is only in the credentials');
+  assert.deepEqual(info.scopes, ['hds/stream/body.read']);
+  assert.ok(Math.abs(info.expiresAt! - (Date.now() / 1000 + 1200)) < 5);
+  assert.equal(seen[0].auth, 'Basic ' + Buffer.from('mcp:s').toString('base64'));
+  assert.equal(seen[0].redirect, 'error');
+  assert.deepEqual([...seen[0].form.keys()].sort(), ['grant_type', 'subject_token', 'subject_token_type']);
+  assert.equal(seen[0].form.get('grant_type'), 'urn:ietf:params:oauth:grant-type:token-exchange');
+  assert.equal(seen[0].form.get('subject_token'), 'subject');
+  assert.equal(seen[0].form.get('subject_token_type'), 'urn:ietf:params:oauth:token-type:access_token');
+  await v.verifyAccessToken('subject');
+  assert.equal(seen.length, 1, 'second call served from the cache');
+});
+
+test('exchangeVerifier: dead or foreign subject → invalid token; operator faults and bad answers → server error', async () => {
+  const v = exchangeWith({
+    dead: { status: 400, body: { error: 'invalid_grant', error_description: 'subject token is not active' } },
+    foreign: { status: 400, body: { error: 'invalid_target' } },
+    notFlagged: { status: 400, body: { error: 'unauthorized_client' } },
+    badSecret: { status: 401, body: { error: 'invalid_client' } },
+    otherCore: { status: 421, body: { error: 'wrong_core', coreUrl: 'https://elsewhere.example/' } },
+    notJson421: { status: 421, body: 'Misdirected' },
+    notJson200: { status: 200, body: '<html>' },
+    dpop: { status: 200, body: { ...derivedOk, token_type: 'DPoP' } },
+    noBase: { status: 200, body: { ...derivedOk, api_base: undefined } },
+    plain: { status: 200, body: { ...derivedOk, api_base: 'http://alias1.demo.datasafe.dev/' } },
+    noType: { status: 200, body: { ...derivedOk, issued_token_type: undefined } },
+    idType: { status: 200, body: { ...derivedOk, issued_token_type: 'urn:ietf:params:oauth:token-type:id_token' } },
+    noTtl: { status: 200, body: { ...derivedOk, expires_in: undefined } },
+    zeroTtl: { status: 200, body: { ...derivedOk, expires_in: 0 } },
+    textTtl: { status: 200, body: { ...derivedOk, expires_in: '1200' } },
+    prod: { status: 200, body: { ...derivedOk, api_base: 'https://alice.api.datasafe.dev/' } }
+  });
+  for (const t of ['dead', 'foreign']) await assert.rejects(v.verifyAccessToken(t), InvalidTokenError, t);
+  for (const t of ['notFlagged', 'badSecret', 'otherCore', 'notJson421', 'notJson200', 'dpop', 'noBase', 'plain', 'noType', 'idType', 'noTtl', 'zeroTtl', 'textTtl']) {
+    await assert.rejects(v.verifyAccessToken(t), ServerError, t);
+  }
+  await assert.rejects(v.verifyAccessToken('prod'), /not available for production/);
+});
+
+test('exchangeVerifier: the cache ends with its window, then a revoked subject is refused', async () => {
+  let revoked = false;
+  const seen: Array<{ auth: string; form: URLSearchParams }> = [];
+  const v = exchangeWith({
+    subject: () => revoked ? { status: 400, body: { error: 'invalid_grant' } } : { status: 200, body: derivedOk }
+  }, seen, { cacheMs: 20 });
+  await v.verifyAccessToken('subject');
+  revoked = true;
+  await v.verifyAccessToken('subject');
+  assert.equal(seen.length, 1, 'inside the window: cached');
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  await assert.rejects(v.verifyAccessToken('subject'), InvalidTokenError);
+  assert.equal(seen.length, 2);
+});
+
+test('exchangeVerifier: the cache never outlives expires_in', async () => {
+  const seen: Array<{ auth: string; form: URLSearchParams }> = [];
+  const v = exchangeWith({ subject: { status: 200, body: { ...derivedOk, expires_in: 1 } } }, seen);
+  await v.verifyAccessToken('subject');
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  await v.verifyAccessToken('subject');
+  assert.equal(seen.length, 2);
+});
+
+test('exchangeVerifier: a stalled token endpoint times out', async () => {
+  const v = exchangeVerifier({
+    tokenEndpoint: 'https://issuer.test/oauth2/token',
     clientId: 'mcp',
     clientSecret: 's',
     resourceUrl: new URL('https://mcp.demo.datasafe.dev/mcp'),
