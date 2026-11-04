@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-04
+
 ### Added
 - `HDS_MCP_TOKEN_EXCHANGE=true` (off by default): the connector's token is exchanged at the core's token endpoint
   (OAuth 2.0 Token Exchange, RFC 8693) for a derived token of the same grant, and the tools call the API with that
