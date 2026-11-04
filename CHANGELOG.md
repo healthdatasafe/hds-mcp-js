@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-11-04
+
 ### Added
 - `get_connection`: which HDS platform the session uses (production = the person's real record; demo = a test
   platform) and whether it is connected. The remote MCP's server instructions and manifest (`platform`) name its
