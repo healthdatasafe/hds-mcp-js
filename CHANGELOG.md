@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-04
+
 ### Added
 - The adapter manifest names the raw-mode address (`rawEndpoint`) when raw mode is on, so the account app's AI
   assistant tab can offer it to assistants without a Client ID field.
