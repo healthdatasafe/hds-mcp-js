@@ -106,7 +106,10 @@ export function rawMode (cfg: RawConfig) {
       u.username = secret.token;
       apiEndpoint = u.href;
     } else {
-      apiEndpoint = body.apiEndpoint;
+      // The core fell back to inline delivery (no secret could be made): the token sits in the endpoint or beside it.
+      const u = new URL(body.apiEndpoint);
+      if (!u.username && typeof body.token === 'string') u.username = body.token;
+      apiEndpoint = u.href;
     }
     const api = new URL(apiEndpoint);
     if (api.protocol !== 'https:' || !api.username) throw new Error('sign-in returned an unusable API address');

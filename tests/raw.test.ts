@@ -9,7 +9,7 @@ import { rawMode } from '../src/http/raw.ts';
 const PERMS = [{ streamId: 'body', level: 'manage' as const, defaultName: 'Body' }];
 
 // A fake platform behind fetchFn: service info, auth request + poll, one-time secret, access-info, access delete.
-function platform (opts: { name?: string, expires?: number | null, deleteStatus?: number } = {}) {
+function platform (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean } = {}) {
   const state = { poll: 'NEED_SIGNIN', retrieved: 0, deleted: [] as string[], authBody: null as any };
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
   const fetchFn = (async (input: string | URL, init?: RequestInit) => {
@@ -21,7 +21,9 @@ function platform (opts: { name?: string, expires?: number | null, deleteStatus?
     }
     if (url === 'https://reg.fake.test/access/k1') {
       return json(state.poll === 'ACCEPTED'
-        ? { status: 'ACCEPTED', username: 'alice', apiEndpoint: 'https://api.fake.test/alice/', handoff: { type: 'shared-secret', key: 's1' } }
+        ? (opts.inline
+            ? { status: 'ACCEPTED', username: 'alice', apiEndpoint: 'https://api.fake.test/alice/', token: 'tok-alice' }
+            : { status: 'ACCEPTED', username: 'alice', apiEndpoint: 'https://api.fake.test/alice/', handoff: { type: 'shared-secret', key: 's1' } })
         : { status: state.poll });
     }
     if (url === 'https://api.fake.test/alice/shared-secrets/retrieve') {
@@ -42,7 +44,7 @@ function platform (opts: { name?: string, expires?: number | null, deleteStatus?
   return { state, fetchFn };
 }
 
-async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number } = {}) {
+async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean } = {}) {
   const p = platform(opts);
   const allowedHosts: string[] = [];
   const raw = rawMode({ serviceInfoUrl: 'https://reg.fake.test/service/info', allowedHosts, fetchFn: p.fetchFn, permissions: async () => PERMS });
@@ -199,5 +201,15 @@ test('raw: closing the session (HTTP DELETE) revokes its access', async () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     assert.deepEqual(t.p.state.deleted, ['acc1']);
     assert.equal(t.raw.sessionCount(), 0);
+  } finally { t.server.close(); }
+});
+
+test('raw: the core falling back to inline delivery (token beside the endpoint) still signs in, verified', async () => {
+  const t = await start({ inline: true });
+  try {
+    await t.tool('connect');
+    t.p.state.poll = 'ACCEPTED';
+    assert.match(await t.tool('connect_status'), /Connected as alice/);
+    assert.equal(t.p.state.retrieved, 0);
   } finally { t.server.close(); }
 });
