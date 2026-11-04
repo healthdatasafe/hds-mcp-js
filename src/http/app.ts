@@ -8,6 +8,7 @@ import { buildServer, packageName, version } from '../server.ts';
 import { runWithCredentials, type RequestCredentials } from '../auth/session.ts';
 import { safeLog } from '../lib/scrubber.ts';
 import { observabilityTiming, type HttpObservability } from './observability.ts';
+import { adapterBasePath } from './paths.ts';
 
 export interface HttpAppConfig {
   publicUrl: URL;
@@ -59,13 +60,16 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
   const app = express();
   app.disable('x-powered-by');
   if (cfg.observability) app.use(observabilityTiming(cfg.observability.obs, cfg.observability.methods));
+  const path = cfg.publicUrl.pathname;
+  const base = adapterBasePath(path);
   // Liveness for the Dokku deploy healthcheck and deploy-image.sh (which reads `version`). No auth, no dependency.
-  app.get('/status', (_req: Request, res: Response) => {
+  // At the root for the local healthcheck, and under the base where a sidecar is reachable.
+  app.get([...new Set(['/status', `${base}status`])], (_req: Request, res: Response) => {
     res.json({ status: 'ok', name: packageName, version });
   });
   // Public, no credentials: readable from any origin (the account app fetches it cross-origin).
   const manifest = adapterManifest(cfg);
-  app.get('/manifest.json', (_req: Request, res: Response) => {
+  app.get(`${base}manifest.json`, (_req: Request, res: Response) => {
     res.set('Access-Control-Allow-Origin', '*').json(manifest);
   });
   app.use(originCheck(cfg.allowedOrigins));
@@ -79,7 +83,6 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
     verifier: cfg.verifier,
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(cfg.publicUrl)
   });
-  const path = cfg.publicUrl.pathname;
 
   app.post(path, express.json({ limit: '4mb' }), auth, async (req: Request, res: Response) => {
     const credentials = req.auth?.extra?.credentials as RequestCredentials | undefined;

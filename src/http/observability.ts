@@ -1,6 +1,7 @@
 import os from 'node:os';
 import type { Request, Response, NextFunction, RequestHandler } from 'express';
 import { safeLog } from '../lib/scrubber.ts';
+import { adapterBasePath } from './paths.ts';
 
 // hds-observability-js is an optional dependency: a stdio install may skip it, and the `prepare` build must still
 // compile. So nothing here imports it statically, types included: the slice used is declared below and the module is
@@ -45,13 +46,15 @@ export type HttpObservability = Pick<Observability<string, ErrorCode>, 'recordCa
 /** The closed set of `METHOD /path` ids this app serves, from its MCP path (deployment config, never request data). */
 export function httpMethods (mcpPath: string): string[] {
   const rs = mcpPath === '/' ? '' : mcpPath;
-  return [
+  const base = adapterBasePath(mcpPath);
+  return [...new Set([
     `POST ${mcpPath}`, `GET ${mcpPath}`, `DELETE ${mcpPath}`,
     'GET /status',
-    'GET /manifest.json',
+    `GET ${base}status`,
+    `GET ${base}manifest.json`,
     `GET /.well-known/oauth-protected-resource${rs}`,
     'GET /.well-known/oauth-authorization-server'
-  ];
+  ])];
 }
 
 function statusClassOf (code: number): StatusClass {

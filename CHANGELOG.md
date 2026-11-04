@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+- Sidecar deployment behind a Pryv core (adapter contract rule 5): when `HDS_MCP_PUBLIC_URL` has a path such as
+  `/adapter/mcp/mcp`, the manifest is served under its folder (`/adapter/mcp/manifest.json`), where the core
+  forwards, and `/status` there as well as at the root. A public URL of `/mcp` behaves as before.
+
 ## [0.9.0] - 2026-11-04
 
 ### Added

@@ -135,6 +135,35 @@ test('GET /status: 200 with name and version, no token, any Origin', async () =>
   assert.deepEqual(await res.json(), { status: 'ok', name: pkg.name, version: pkg.version });
 });
 
+test('sidecar under /adapter/mcp/: manifest, status and the MCP under the base, RFC 9728 metadata at the root', async () => {
+  const app = createHttpApp({
+    publicUrl: new URL('http://127.0.0.1/adapter/mcp/mcp'),
+    oauthMetadata: { issuer: 'https://issuer.test', authorization_endpoint: 'https://issuer.test/a', token_endpoint: 'https://issuer.test/t', response_types_supported: ['code'] },
+    allowedOrigins: [],
+    verifier: { async verifyAccessToken () { throw new InvalidTokenError('Token is not active'); } }
+  });
+  const s = http.createServer(app);
+  const base = await listen(s);
+  try {
+    const m = (await (await fetch(`${base}/adapter/mcp/manifest.json`)).json()) as Record<string, unknown>;
+    assert.equal(m.mcpEndpoint, 'http://127.0.0.1/adapter/mcp/mcp');
+    assert.equal(m.protectedResourceMetadata, 'http://127.0.0.1/.well-known/oauth-protected-resource/adapter/mcp/mcp');
+    assert.equal((await fetch(`${base}/manifest.json`)).status, 404);
+    assert.equal((await fetch(`${base}/adapter/mcp/status`)).status, 200);
+    assert.equal((await fetch(`${base}/status`)).status, 200);
+    assert.equal((await fetch(`${base}/.well-known/oauth-protected-resource/adapter/mcp/mcp`)).status, 200);
+    const res = await fetch(`${base}/adapter/mcp/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    assert.equal(res.status, 401);
+    assert.match(res.headers.get('www-authenticate') ?? '', /oauth-protected-resource\/adapter\/mcp\/mcp/);
+  } finally { s.close(); }
+});
+
+test('httpMethods: base routes follow the MCP path, no duplicates at the root', () => {
+  assert.deepEqual(httpMethods('/mcp').filter((m) => m.includes('status') || m.includes('manifest')), ['GET /status', 'GET /manifest.json']);
+  assert.ok(httpMethods('/adapter/mcp/mcp').includes('GET /adapter/mcp/manifest.json'));
+  assert.ok(httpMethods('/adapter/mcp/mcp').includes('GET /adapter/mcp/status'));
+});
+
 test('observability: records registered route ids only, with status class and error code', async () => {
   const calls: string[] = [];
   const errors: string[] = [];

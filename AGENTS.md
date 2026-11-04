@@ -192,7 +192,13 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   with `resource_metadata`; any other refusal (row not flagged, suspended, 421 `wrong_core`, never followed) → 500
   and a log line. Same 60 s cache, capped by `expires_in`.
 - One MCP per core: issuers are per core, and clients follow only the first `authorization_servers` entry.
-- **Discovery.** `GET /manifest.json` is the Pryv adapter manifest (`type: "mcp"`, `mcpEndpoint`,
+- **Sidecar behind the core** (Pryv adapter contract rule 5, perki 2026-11-04): with `HDS_MCP_PUBLIC_URL` =
+  `https://<core domain>/adapter/mcp/mcp`, the adapter base is the MCP path's folder (`/adapter/mcp/`), and the
+  manifest and status are served under it too (`/status` also stays at the root for the container healthcheck). The
+  core must forward `<base>` and the root RFC 9728 path `/.well-known/oauth-protected-resource<MCP path>`: on demo
+  through `infra/dev-deploy/dokku/create-sidecar.sh route … /adapter/mcp /.well-known/oauth-protected-resource/adapter/mcp`.
+  A public URL of `/mcp` keeps everything at the root, as on a host of its own.
+- **Discovery.** `GET <base>manifest.json` is the Pryv adapter manifest (`type: "mcp"`, `mcpEndpoint`,
   `authorizationServer`, connector `clients` from `HDS_MCP_CONNECTOR_CLIENTS="claude=…,chatgpt=…"`), public and
   CORS-open. A core lists this server's base URL in `/service/info` `adapters`; the account app reads the manifest to
   show the user their URL. Gated: nothing lists it until CIMD (perki).
