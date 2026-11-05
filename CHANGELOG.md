@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-05
+
 ### Fixed
 - Raw mode: the access check accepts what the core adds to every app access (masks at level `none`, such as
   `:_system:account:` and genetics, and a read of the access's own audit stream); any other extra is still refused.
