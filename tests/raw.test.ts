@@ -9,7 +9,7 @@ import { rawMode } from '../src/http/raw.ts';
 const PERMS = [{ streamId: 'body', level: 'manage' as const, defaultName: 'Body' }];
 
 // A fake platform behind fetchFn: service info, auth request + poll, one-time secret, access-info, access delete.
-function platform (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean } = {}) {
+function platform (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean, extra?: Array<{ streamId: string, level: string }> } = {}) {
   const state = { poll: 'NEED_SIGNIN', retrieved: 0, deleted: [] as string[], authBody: null as any };
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { 'content-type': 'application/json' } });
   const fetchFn = (async (input: string | URL, init?: RequestInit) => {
@@ -33,7 +33,7 @@ function platform (opts: { name?: string, expires?: number | null, deleteStatus?
     if (url === 'https://api.fake.test/alice/access-info') {
       assert.equal((init?.headers as Record<string, string>).authorization, 'tok-alice');
       const expires = opts.expires === undefined ? Math.floor(Date.now() / 1000) + 4 * 3600 : opts.expires;
-      return json({ id: 'acc1', type: 'app', name: opts.name ?? 'hds-mcp-raw', deviceName: state.authBody.deviceName, ...(expires == null ? {} : { expires }), permissions: [...state.authBody.requestedPermissions, { feature: 'selfRevoke', setting: 'allowed' }], user: { username: 'alice' } });
+      return json({ id: 'acc1', type: 'app', name: opts.name ?? 'hds-mcp-raw', deviceName: state.authBody.deviceName, ...(expires == null ? {} : { expires }), permissions: [...state.authBody.requestedPermissions, ...(opts.extra ?? []), { feature: 'selfRevoke', setting: 'allowed' }], user: { username: 'alice' } });
     }
     if (url === 'https://api.fake.test/alice/accesses/acc1' && init?.method === 'DELETE') {
       state.deleted.push('acc1');
@@ -44,7 +44,7 @@ function platform (opts: { name?: string, expires?: number | null, deleteStatus?
   return { state, fetchFn };
 }
 
-async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean, master?: boolean } = {}) {
+async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean, master?: boolean, extra?: Array<{ streamId: string, level: string }> } = {}) {
   const p = platform(opts);
   const allowedHosts: string[] = [];
   const raw = rawMode({ serviceInfoUrl: 'https://reg.fake.test/service/info', allowedHosts, fetchFn: p.fetchFn, ...(opts.master ? {} : { permissions: async () => PERMS }) });
@@ -222,4 +222,27 @@ test('raw: by default connect asks for the master access * at manage, and accept
     t.p.state.poll = 'ACCEPTED';
     assert.match(await t.tool('connect_status'), /Connected as alice/);
   } finally { t.server.close(); }
+});
+
+test('raw: core-added masks (none) and the access own audit read are accepted; any other extra is refused', async () => {
+  const ok = await start({
+    master: true,
+    extra: [
+      { streamId: ':_system:account:', level: 'none' },
+      { streamId: 'genetics', level: 'none' },
+      { streamId: ':_audit:access-acc1', level: 'read' }
+    ]
+  });
+  try {
+    await ok.tool('connect');
+    ok.p.state.poll = 'ACCEPTED';
+    assert.match(await ok.tool('connect_status'), /Connected as alice/);
+  } finally { ok.server.close(); }
+  const bad = await start({ master: true, extra: [{ streamId: ':_audit:access-other', level: 'read' }] });
+  try {
+    await bad.tool('connect');
+    bad.p.state.poll = 'ACCEPTED';
+    assert.match(await bad.tool('connect_status'), /:_audit:access-other: not asked, got read/);
+    assert.deepEqual(bad.p.state.deleted, ['acc1']);
+  } finally { bad.server.close(); }
 });

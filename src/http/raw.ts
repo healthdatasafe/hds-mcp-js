@@ -12,14 +12,15 @@ import { safeLog } from '../lib/scrubber.ts';
 /**
  * Raw mode (plan 118 RAW-MODE.md, perki 2026-11-04): for clients without the connector OAuth. The person adds only
  * the URL; `connect` returns the platform's sign-in link; once they accept, this MCP session holds an app access to
- * all their data (a master access `*` at manage, genetics included: perki 2026-11-05) that expires on its own at
+ * all their data (a master access `*` at manage; the platform masks genetics) that expires on its own at
  * the core. Stateful, in memory: a restart
  * signs everyone out. Fable review 2026-11-04 fixes: fixed platform, accepted access verified, one-time credential
  * hand-off, `expireAfter`, no re-bind, no sign-in or poll URL in logs, pending sessions capped apart.
  */
 
 export const RAW_APP_ID = 'hds-mcp-raw';
-// One consent line instead of one per root (perki 2026-11-05). Genetics included in raw mode by perki's decision.
+// One consent line instead of one per root (perki 2026-11-05). The platform masks explicit-grant-only roots
+// (genetics) under `*`; perki: follow the platform.
 const MASTER: RequestedPermission[] = [{ streamId: '*', level: 'manage' }];
 const PENDING_TTL_MS = 10 * 60_000;
 const IDLE_MS = 30 * 60_000;
@@ -133,7 +134,11 @@ export function rawMode (cfg: RawConfig) {
         info.name !== RAW_APP_ID ? `name ${info.name}` : '',
         info.deviceName !== pending.deviceName ? `deviceName ${info.deviceName ?? 'absent'}` : '',
         ...[...asked].filter(([id, level]) => gotMap.get(id) !== level).map(([id, level]) => `${id}: asked ${level}, got ${gotMap.get(id) ?? 'none'}`),
-        ...got.filter((p) => !asked.has(p.streamId)).map((p) => `${p.streamId}: not asked, got ${p.level}`)
+        // The core adds its own masks (level none: `:_system:account:`, explicit-grant-only roots such as genetics)
+        // and a read of the access's own audit stream; neither grants more than asked. Anything else is refused.
+        ...got.filter((p) => !asked.has(p.streamId) && p.level !== 'none' &&
+          !(p.streamId === `:_audit:access-${info.id}` && p.level === 'read'))
+          .map((p) => `${p.streamId}: not asked, got ${p.level}`)
       ].filter(Boolean);
       if (diffs.length > 0) {
         throw new Error(`the accepted access is not the one this session asked for (${diffs.slice(0, 6).join('; ')})`);
@@ -202,7 +207,7 @@ export function rawMode (cfg: RawConfig) {
     return (server: McpServer) => {
       server.tool(
         'connect',
-        'Sign the person in to their Health Data Safe account. Returns a link: give it to them to open, sign in and accept. The access covers all their HDS data (genetic results included, if they have any), with the right to add and change data, and ends on its own after 4 hours or when they disconnect. Then call connect_status. Before reading any record, tell them that what you read is sent to your model provider.',
+        'Sign the person in to their Health Data Safe account. Returns a link: give it to them to open, sign in and accept. The access covers all their HDS data except genetic results (HDS keeps those for an explicit grant), with the right to add and change data, and ends on its own after 4 hours or when they disconnect. Then call connect_status. Before reading any record, tell them that what you read is sent to your model provider.',
         {},
         async () => {
           const s = getSession();

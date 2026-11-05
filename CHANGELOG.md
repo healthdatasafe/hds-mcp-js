@@ -2,11 +2,15 @@
 
 ## [Unreleased]
 
+### Fixed
+- Raw mode: the access check accepts what the core adds to every app access (masks at level `none`, such as
+  `:_system:account:` and genetics, and a read of the access's own audit stream); any other extra is still refused.
+
 ## [0.14.0] - 2026-11-05
 
 ### Changed
-- Raw mode asks for a master access (`*`, manage) instead of one permission per data root: one consent line. It
-  includes genetic results (perki, 2026-11-05); the OAuth connector still leaves genetics out.
+- Raw mode asks for a master access (`*`, manage) instead of one permission per data root: one consent line. The platform
+  masks genetics under `*` (an explicit-grant-only theme), as the OAuth connector leaves it out.
 
 ## [0.13.1] - 2026-11-04
 
