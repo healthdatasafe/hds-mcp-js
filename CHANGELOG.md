@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-11-05
+
 ### Added
 - `report_problem`: when the connector itself fails, a prefilled "Agent problem" issue link (site-agents) for the
   person to post, with the MCP version; no personal data. The server instructions mention it.
