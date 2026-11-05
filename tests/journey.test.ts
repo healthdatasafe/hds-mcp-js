@@ -94,3 +94,13 @@ test('server instructions name the platform of a remote MCP', async () => {
   assert.match(instructions(buildServer({ http: true, platform: 'production' })), /production platform/);
   assert.match(instructions(buildServer()), /get_connection/);
 });
+
+test('report_problem: a prefilled agent-problem issue link with the version, nothing sent', async () => {
+  const { reportProblemHandler } = await import('../src/tools/reportProblem.ts');
+  const res = await reportProblemHandler({ asked: 'connect to my account', happened: 'connect_status: Sign-in could not be used', client: 'Claude.ai web', step: 'connect' });
+  const url = new URL(res.content[0].text.split('\n').pop()!);
+  assert.equal(url.searchParams.get('template'), 'agent-problem.md');
+  assert.equal(url.searchParams.get('title'), 'MCP problem: connect to my account');
+  assert.match(url.searchParams.get('body') ?? '', /HDS MCP: \d+\.\d+\.\d+/);
+  assert.match(res.content[0].text, /Nothing has been sent/);
+});

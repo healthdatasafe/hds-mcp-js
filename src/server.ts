@@ -17,6 +17,7 @@ import { deleteEventsInput, deleteEventsHandler } from './tools/deleteEvents.ts'
 import { reportMissingItemInput, reportMissingItemHandler } from './tools/reportMissingItem.ts';
 import { getImportGuideInput, getImportGuideHandler } from './tools/getImportGuide.ts';
 import { getConnectionInput, getConnectionHandler } from './tools/getConnection.ts';
+import { reportProblemInput, reportProblemHandler } from './tools/reportProblem.ts';
 import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
 
@@ -52,7 +53,7 @@ export function buildServer (
     instructions: 'Health Data Safe (HDS) account tools. ' + PRIVACY_DISCLOSURE +
       ' Always look data up in the HDS data model (search_items, get_item) before writing it.' +
       ' To import someone\'s medical history (documents, lab reports, photos, spreadsheets, app exports), read get_import_guide first.' +
-      ' When no item fits their data, tell them and offer report_missing_item.' +
+      ' When no item fits their data, tell them and offer report_missing_item; when this connector itself fails, offer report_problem.' +
       // The remote MCP serves one platform; stdio connects to demo unless asked for prod.
       (platform
         ? ` ${platformNote(platform)} Tell the person which platform this is before the first read.`
@@ -181,6 +182,13 @@ export function buildServer (
     'When no HDS item fits the user\'s data (search_items found nothing suitable), prepare a report asking HDS to add one: returns a prefilled GitHub issue link (site-agents, data-model gap) for the user to open and post themselves; nothing is sent by this tool. Offer it to the user, and put only the kind of data, its unit and known codes in it: never their values, names, dates or file names.',
     reportMissingItemInput,
     wrap(reportMissingItemHandler)
+  );
+
+  server.tool(
+    'report_problem',
+    'When this connector fails in a way the person cannot fix (a tool error, a refused sign-in, wrong behaviour), prepare a problem report for the HDS team: returns a prefilled GitHub issue link (site-agents, agent problem) for the person to open and post themselves; nothing is sent by this tool. Put only what was asked and the error as-is: never their health data, names, account name or links.',
+    reportProblemInput,
+    wrap(reportProblemHandler)
   );
 
   // Raw HTTP mode adds its own connect / connect_status / disconnect.

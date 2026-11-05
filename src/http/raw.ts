@@ -174,10 +174,14 @@ export function rawMode (cfg: RawConfig) {
       s.pending = undefined;
       return 'The sign-in link expired. Call connect again for a new one.';
     }
+    const minutesLeft = Math.max(1, Math.ceil((pending.until - Date.now()) / 60_000));
+    const waiting = `HDS has not received the acceptance yet (the link stays valid ${minutesLeft} more minute(s)). ` +
+      'If the person says they accepted, wait a few seconds and call connect_status again; if they closed the page ' +
+      'before the final confirmation, give them the same link again.';
     const r = await call(pending.pollUrl);
-    if (!r.ok) return 'Still waiting for the person to sign in and accept.';
+    if (!r.ok) return waiting;
     const body = await r.json() as any;
-    if (body.status === 'NEED_SIGNIN') return 'Still waiting for the person to sign in and accept.';
+    if (body.status === 'NEED_SIGNIN') return waiting;
     if (body.status === 'REFUSED') {
       s.pending = undefined;
       return 'The person refused the access. Nothing is connected.';
@@ -200,7 +204,7 @@ export function rawMode (cfg: RawConfig) {
       return `Connected as ${s.username} on the HDS ${platformOf(s.credentials!.apiEndpoint)} platform. Tell the person ` +
         'this account name and platform so they can check it is the account they meant.';
     }
-    return 'Still waiting for the person to sign in and accept.';
+    return waiting;
   }
 
   function rawTools (getSession: () => Session) {

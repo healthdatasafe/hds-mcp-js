@@ -95,7 +95,7 @@ test('raw: sign in by link, verified access, tools run as the person, disconnect
     assert.equal(t.p.state.authBody.credentialHandoff, 'shared-secret');
     assert.equal(t.p.state.authBody.expireAfter, 4 * 3600);
     assert.deepEqual(t.p.state.authBody.requestedPermissions, PERMS);
-    assert.match(await t.tool('connect_status'), /Still waiting/);
+    assert.match(await t.tool('connect_status'), /has not received the acceptance yet/);
 
     t.p.state.poll = 'ACCEPTED';
     assert.match(await t.tool('connect_status'), /Connected as alice/);
