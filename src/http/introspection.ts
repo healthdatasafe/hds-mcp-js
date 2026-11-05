@@ -1,7 +1,7 @@
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 import type { AuthInfo } from '@modelcontextprotocol/sdk/server/auth/types.js';
-import { isProdHost } from '../lib/hostPolicy.ts';
+import { platformOf } from '../lib/hostPolicy.ts';
 import { safeLog } from '../lib/scrubber.ts';
 import type { RequestCredentials } from '../auth/session.ts';
 
@@ -32,9 +32,13 @@ interface IntrospectionResponse {
 export function apiCredentials (apiBase: string, token: string, serviceInfoUrl: string): RequestCredentials {
   const api = new URL(apiBase);
   if (api.protocol !== 'https:') throw new InvalidTokenError('Token carries a non-https API base');
-  if (isProdHost(api.href)) throw new InvalidTokenError('The remote HDS MCP is not available for production accounts yet');
+  // One MCP per platform: a demo MCP serves demo accounts only, a production MCP production accounts only.
+  const platform = platformOf(serviceInfoUrl);
+  if (platformOf(api.href) !== platform) throw new InvalidTokenError(`This MCP serves the HDS ${platform} platform; the token is for another HDS platform`);
   api.username = token;
-  return { apiEndpoint: api.href, serviceInfoUrl, prodWritesEnabled: false };
+  // Remote writes are gated by the consent the person gave at sign-in (write scope per theme, or raw mode's grant),
+  // not by the stdio session opt-in: on a production MCP the write lock is open.
+  return { apiEndpoint: api.href, serviceInfoUrl, prodWritesEnabled: platform === 'production' };
 }
 
 function audienceMatches (aud: string | string[] | undefined, resource: URL): boolean {

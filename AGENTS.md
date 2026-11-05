@@ -184,7 +184,10 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   module-level state that holds a user's token or data: concurrent users share the process.
 - **Spike token handling** (perki, 2026-11-02): the API is called with the same token at the `api_base` the core's
   introspection returns. The MCP spec forbids this passthrough; a separate credential through token exchange is a
-  gate before production, and production `api_base` hosts are refused until then.
+  gate before production: `httpMain` refuses to start a production MCP without `HDS_MCP_TOKEN_EXCHANGE=true`.
+- **One platform per MCP:** the platform comes from `HDS_MCP_SERVICE_INFO`; an `api_base` (or raw-mode access) on
+  another platform is refused. On a production MCP the stdio write lock is open (`prodWritesEnabled`): the person's
+  consent at sign-in (write scope per theme, raw mode's grant) is the write gate.
 - **Token exchange** (`HDS_MCP_TOKEN_EXCHANGE=true`, off by default; core design PY1 R7): instead of introspecting,
   the MCP exchanges the connector's token at the core's `token_endpoint` (RFC 8693, `subject_token`, no scope
   narrowing) and calls the API with the derived token at the returned `api_base`. Needs the `hds-mcp` row flagged

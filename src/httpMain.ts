@@ -26,6 +26,10 @@ const oauthMetadata = await metaRes.json() as OAuthMetadata & { introspection_en
 
 // Token exchange (RFC 8693, plan 118 item 6) once the core supports it and the row carries --can-exchange.
 const tokenExchange = process.env.HDS_MCP_TOKEN_EXCHANGE === 'true';
+// perki's gate (plan 118): no production MCP without token exchange; passing the connector's token through is demo only.
+if (platformOf(serviceInfoUrl) === 'production' && !tokenExchange) {
+  throw new Error('A production MCP needs HDS_MCP_TOKEN_EXCHANGE=true (token passthrough is demo only)');
+}
 const secretEndpoint = tokenExchange ? oauthMetadata.token_endpoint : oauthMetadata.introspection_endpoint;
 if (!secretEndpoint) throw new Error(`${issuer} publishes no ${tokenExchange ? 'token' : 'introspection'} endpoint`);
 // The MCP posts its client secret there: https, on the issuer's own host only.

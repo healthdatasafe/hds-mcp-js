@@ -224,7 +224,7 @@ test('introspectionVerifier: active token → credentials at api_base; prod, ina
   await v.verifyAccessToken('good');
   assert.equal(calls, 1, 'second call served from the cache');
   assert.ok(info.expiresAt! > Date.now() / 1000, 'no exp: expires at the end of the cache window');
-  await assert.rejects(v.verifyAccessToken('prod'), /not available for production/);
+  await assert.rejects(v.verifyAccessToken('prod'), /another HDS platform/);
   await assert.rejects(v.verifyAccessToken('dead'), /not active/);
   await assert.rejects(v.verifyAccessToken('other'), /not issued for this MCP/);
   await assert.rejects(v.verifyAccessToken('noaud'), /not issued for this MCP/, 'aud required by default');
@@ -338,7 +338,7 @@ test('exchangeVerifier: dead or foreign subject → invalid token; operator faul
   for (const t of ['notFlagged', 'badSecret', 'otherCore', 'notJson421', 'notJson200', 'dpop', 'noBase', 'plain', 'noType', 'idType', 'noTtl', 'zeroTtl', 'textTtl']) {
     await assert.rejects(v.verifyAccessToken(t), ServerError, t);
   }
-  await assert.rejects(v.verifyAccessToken('prod'), /not available for production/);
+  await assert.rejects(v.verifyAccessToken('prod'), /another HDS platform/);
 });
 
 test('exchangeVerifier: the cache ends with its window, then a revoked subject is refused', async () => {
@@ -397,4 +397,16 @@ test('introspectionVerifier: requireAudience refuses a token without aud, accept
   });
   await assert.rejects(v.verifyAccessToken('noaud'), /not issued for this MCP/);
   assert.ok(await v.verifyAccessToken('right'));
+});
+
+test('apiCredentials: one platform per MCP; production MCP opens the write lock, demo keeps it closed', async () => {
+  const { apiCredentials } = await import('../src/http/introspection.ts');
+  const prodSi = 'https://reg.api.datasafe.dev/service/info';
+  const demoSi = 'https://demo.datasafe.dev/reg/service/info';
+  const prod = apiCredentials('https://alice.api.datasafe.dev/', 'tok', prodSi);
+  assert.equal(prod.prodWritesEnabled, true);
+  assert.equal(prod.apiEndpoint, 'https://tok@alice.api.datasafe.dev/');
+  assert.throws(() => apiCredentials('https://demo.datasafe.dev/alice/', 'tok', prodSi), /another HDS platform/);
+  assert.equal(apiCredentials('https://demo.datasafe.dev/alice/', 'tok', demoSi).prodWritesEnabled, false);
+  assert.throws(() => apiCredentials('https://alice.api.datasafe.dev/', 'tok', demoSi), /another HDS platform/);
 });

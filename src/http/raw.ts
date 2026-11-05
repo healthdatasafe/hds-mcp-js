@@ -6,7 +6,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { buildServer } from '../server.ts';
 import { runWithCredentials, type RequestCredentials } from '../auth/session.ts';
 import type { RequestedPermission } from '../auth/pryvAuth.ts';
-import { isProdHost, platformOf } from '../lib/hostPolicy.ts';
+import { platformOf } from '../lib/hostPolicy.ts';
 import { safeLog } from '../lib/scrubber.ts';
 
 /**
@@ -123,7 +123,9 @@ export function rawMode (cfg: RawConfig) {
     if (!r.ok) throw new Error(`access check failed: HTTP ${r.status}`);
     const info = await r.json() as any;
     try {
-      if (isProdHost(api.href)) throw new Error('The remote HDS MCP is not available for production accounts yet');
+      if (platformOf(api.href) !== platformOf(cfg.serviceInfoUrl)) {
+        throw new Error(`this MCP serves the HDS ${platformOf(cfg.serviceInfoUrl)} platform; the access is on another platform`);
+      }
       const asked = new Map(pending.permissions.map((p) => [p.streamId, p.level]));
       // Feature permissions (e.g. selfRevoke) carry no streamId.
       const got: Array<{ streamId: string; level: string }> = (info.permissions ?? []).filter((p: any) => p.streamId != null);
@@ -152,7 +154,8 @@ export function rawMode (cfg: RawConfig) {
       if (info.id) await deleteAccess(apiEndpoint, info.id);
       throw err;
     }
-    s.credentials = { apiEndpoint, serviceInfoUrl: cfg.serviceInfoUrl, prodWritesEnabled: false };
+    // The person consented to the whole grant at sign-in: on a production MCP the write lock is open.
+    s.credentials = { apiEndpoint, serviceInfoUrl: cfg.serviceInfoUrl, prodWritesEnabled: platformOf(cfg.serviceInfoUrl) === 'production' };
     s.accessId = info.id;
     s.username = info.user?.username ?? body.username;
     if (s.pending === pending) s.pending = undefined;

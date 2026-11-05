@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+- Ready for a production MCP: instead of refusing every production account, each MCP serves its own platform only
+  (from `HDS_MCP_SERVICE_INFO`) and refuses accounts of the other; on a production MCP, writes are gated by the
+  consent given at sign-in rather than the stdio opt-in. A production MCP refuses to start without
+  `HDS_MCP_TOKEN_EXCHANGE=true`.
+
 ## [0.15.0] - 2026-11-05
 
 ### Added
