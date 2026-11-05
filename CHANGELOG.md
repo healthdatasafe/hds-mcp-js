@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-11-05
+
+### Fixed
+- Raw mode on production: `connect` refused every sign-in ("unexpected answer") because the register's poll URL sits
+  on the person's core (`core-ch1.api.datasafe.dev`) while the access URL is `access.api.datasafe.dev`. The poll URL
+  may now be on a host under the access host's parent domain (not a bare registrable domain); any other host is still
+  refused. Demo was unaffected (one host).
+
 ## [0.16.0] - 2026-11-05
 
 ### Changed
