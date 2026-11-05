@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-11-05
+
 ### Changed
 - Ready for a production MCP: instead of refusing every production account, each MCP serves its own platform only
   (from `HDS_MCP_SERVICE_INFO`) and refuses accounts of the other; on a production MCP, writes are gated by the
