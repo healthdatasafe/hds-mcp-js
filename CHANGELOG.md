@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- Raw mode asks for a master access (`*`, manage) instead of one permission per data root: one consent line. It
+  includes genetic results (perki, 2026-11-05); the OAuth connector still leaves genetics out.
+
 ## [0.13.1] - 2026-11-04
 
 ### Fixed

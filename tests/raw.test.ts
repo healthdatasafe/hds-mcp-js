@@ -33,7 +33,7 @@ function platform (opts: { name?: string, expires?: number | null, deleteStatus?
     if (url === 'https://api.fake.test/alice/access-info') {
       assert.equal((init?.headers as Record<string, string>).authorization, 'tok-alice');
       const expires = opts.expires === undefined ? Math.floor(Date.now() / 1000) + 4 * 3600 : opts.expires;
-      return json({ id: 'acc1', type: 'app', name: opts.name ?? 'hds-mcp-raw', deviceName: state.authBody.deviceName, ...(expires == null ? {} : { expires }), permissions: [...PERMS, { feature: 'selfRevoke', setting: 'allowed' }], user: { username: 'alice' } });
+      return json({ id: 'acc1', type: 'app', name: opts.name ?? 'hds-mcp-raw', deviceName: state.authBody.deviceName, ...(expires == null ? {} : { expires }), permissions: [...state.authBody.requestedPermissions, { feature: 'selfRevoke', setting: 'allowed' }], user: { username: 'alice' } });
     }
     if (url === 'https://api.fake.test/alice/accesses/acc1' && init?.method === 'DELETE') {
       state.deleted.push('acc1');
@@ -44,10 +44,10 @@ function platform (opts: { name?: string, expires?: number | null, deleteStatus?
   return { state, fetchFn };
 }
 
-async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean } = {}) {
+async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean, master?: boolean } = {}) {
   const p = platform(opts);
   const allowedHosts: string[] = [];
-  const raw = rawMode({ serviceInfoUrl: 'https://reg.fake.test/service/info', allowedHosts, fetchFn: p.fetchFn, permissions: async () => PERMS });
+  const raw = rawMode({ serviceInfoUrl: 'https://reg.fake.test/service/info', allowedHosts, fetchFn: p.fetchFn, ...(opts.master ? {} : { permissions: async () => PERMS }) });
   const app = createHttpApp({
     publicUrl: new URL('http://127.0.0.1/adapter/mcp/mcp'),
     oauthMetadata: { issuer: 'https://issuer.test', authorization_endpoint: 'https://issuer.test/a', token_endpoint: 'https://issuer.test/t', response_types_supported: ['code'] },
@@ -211,5 +211,15 @@ test('raw: the core falling back to inline delivery (token beside the endpoint) 
     t.p.state.poll = 'ACCEPTED';
     assert.match(await t.tool('connect_status'), /Connected as alice/);
     assert.equal(t.p.state.retrieved, 0);
+  } finally { t.server.close(); }
+});
+
+test('raw: by default connect asks for the master access * at manage, and accepts it', async () => {
+  const t = await start({ master: true });
+  try {
+    await t.tool('connect');
+    assert.deepEqual(t.p.state.authBody.requestedPermissions, [{ streamId: '*', level: 'manage' }]);
+    t.p.state.poll = 'ACCEPTED';
+    assert.match(await t.tool('connect_status'), /Connected as alice/);
   } finally { t.server.close(); }
 });

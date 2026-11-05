@@ -6,19 +6,21 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { buildServer } from '../server.ts';
 import { runWithCredentials, type RequestCredentials } from '../auth/session.ts';
 import type { RequestedPermission } from '../auth/pryvAuth.ts';
-import { allDataPermissions } from '../tools/connect.ts';
 import { isProdHost, platformOf } from '../lib/hostPolicy.ts';
 import { safeLog } from '../lib/scrubber.ts';
 
 /**
  * Raw mode (plan 118 RAW-MODE.md, perki 2026-11-04): for clients without the connector OAuth. The person adds only
  * the URL; `connect` returns the platform's sign-in link; once they accept, this MCP session holds an app access to
- * every data root (manage, genetics excluded) that expires on its own at the core. Stateful, in memory: a restart
+ * all their data (a master access `*` at manage, genetics included: perki 2026-11-05) that expires on its own at
+ * the core. Stateful, in memory: a restart
  * signs everyone out. Fable review 2026-11-04 fixes: fixed platform, accepted access verified, one-time credential
  * hand-off, `expireAfter`, no re-bind, no sign-in or poll URL in logs, pending sessions capped apart.
  */
 
 export const RAW_APP_ID = 'hds-mcp-raw';
+// One consent line instead of one per root (perki 2026-11-05). Genetics included in raw mode by perki's decision.
+const MASTER: RequestedPermission[] = [{ streamId: '*', level: 'manage' }];
 const PENDING_TTL_MS = 10 * 60_000;
 const IDLE_MS = 30 * 60_000;
 const LIFETIME_MS = 4 * 3600_000;
@@ -31,7 +33,7 @@ export interface RawConfig {
   serviceInfoUrl: string;
   allowedHosts: string[];
   fetchFn?: typeof fetch;
-  /** For tests; deployments use every data-model root at manage, genetics excluded. */
+  /** For tests; deployments ask for the master access `*` at manage. */
   permissions?: () => Promise<RequestedPermission[]>;
 }
 
@@ -124,9 +126,17 @@ export function rawMode (cfg: RawConfig) {
       const asked = new Map(pending.permissions.map((p) => [p.streamId, p.level]));
       // Feature permissions (e.g. selfRevoke) carry no streamId.
       const got: Array<{ streamId: string; level: string }> = (info.permissions ?? []).filter((p: any) => p.streamId != null);
-      if (info.type !== 'app' || info.name !== RAW_APP_ID || info.deviceName !== pending.deviceName ||
-          got.length !== asked.size || !got.every((p) => asked.get(p.streamId) === p.level)) {
-        throw new Error('the accepted access is not the one this session asked for');
+      // Name what differs (stream ids and device names only, never a token) so a mismatch can be diagnosed.
+      const gotMap = new Map(got.map((p) => [p.streamId, p.level]));
+      const diffs = [
+        info.type !== 'app' ? `type ${info.type}` : '',
+        info.name !== RAW_APP_ID ? `name ${info.name}` : '',
+        info.deviceName !== pending.deviceName ? `deviceName ${info.deviceName ?? 'absent'}` : '',
+        ...[...asked].filter(([id, level]) => gotMap.get(id) !== level).map(([id, level]) => `${id}: asked ${level}, got ${gotMap.get(id) ?? 'none'}`),
+        ...got.filter((p) => !asked.has(p.streamId)).map((p) => `${p.streamId}: not asked, got ${p.level}`)
+      ].filter(Boolean);
+      if (diffs.length > 0) {
+        throw new Error(`the accepted access is not the one this session asked for (${diffs.slice(0, 6).join('; ')})`);
       }
       // A manage access must end on its own: refuse one without the expiry this session asked for.
       if (typeof info.expires !== 'number' || info.expires > Date.now() / 1000 + LIFETIME_MS / 1000 + 60) {
@@ -192,7 +202,7 @@ export function rawMode (cfg: RawConfig) {
     return (server: McpServer) => {
       server.tool(
         'connect',
-        'Sign the person in to their Health Data Safe account. Returns a link: give it to them to open, sign in and accept. The access covers all their HDS data except genetics, with the right to add and change data, and ends on its own after 4 hours or when they disconnect. Then call connect_status. Before reading any record, tell them that what you read is sent to your model provider.',
+        'Sign the person in to their Health Data Safe account. Returns a link: give it to them to open, sign in and accept. The access covers all their HDS data (genetic results included, if they have any), with the right to add and change data, and ends on its own after 4 hours or when they disconnect. Then call connect_status. Before reading any record, tell them that what you read is sent to your model provider.',
         {},
         async () => {
           const s = getSession();
@@ -203,7 +213,7 @@ export function rawMode (cfg: RawConfig) {
           if (!si.ok) throw new Error(`service info failed: HTTP ${si.status}`);
           const access: string | undefined = (await si.json() as any).access;
           if (!access) throw new Error('service info has no access URL');
-          const permissions = cfg.permissions ? await cfg.permissions() : (await allDataPermissions('manage')).permissions;
+          const permissions = cfg.permissions ? await cfg.permissions() : MASTER;
           const deviceName = `session-${randomBytes(6).toString('hex')}`;
           const r = await call(access, {
             method: 'POST',
