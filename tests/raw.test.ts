@@ -4,7 +4,7 @@ import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { InvalidTokenError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import { createHttpApp } from '../src/http/app.ts';
-import { rawMode } from '../src/http/raw.ts';
+import { pollOnPlatform, rawMode } from '../src/http/raw.ts';
 
 const PERMS = [{ streamId: 'body', level: 'manage' as const, defaultName: 'Body' }];
 
@@ -43,6 +43,23 @@ function platform (opts: { name?: string, expires?: number | null, deleteStatus?
   }) as typeof fetch;
   return { state, fetchFn };
 }
+
+test('raw: the poll URL may sit on the person\'s core (production), never off the platform', () => {
+  const prod = 'https://access.api.datasafe.dev/access/';
+  assert.equal(pollOnPlatform('https://core-ch1.api.datasafe.dev/reg/access/k1', prod), true);
+  assert.equal(pollOnPlatform('https://core-us1-east.api.datasafe.dev/reg/access/k1', prod), true);
+  assert.equal(pollOnPlatform('https://access.api.datasafe.dev/access/k1', prod), true);
+  assert.equal(pollOnPlatform('https://evil.test/reg/access/k1', prod), false);
+  assert.equal(pollOnPlatform('https://api.datasafe.dev.evil.test/k1', prod), false);
+  assert.equal(pollOnPlatform('http://core-ch1.api.datasafe.dev/reg/access/k1', prod), false);
+  assert.equal(pollOnPlatform('https://core-ch1.api.datasafe.dev:8443/reg/access/k1', prod), false);
+  assert.equal(pollOnPlatform('https://other.datasafe.dev/reg/access/k1', prod), false);
+  // Demo: access on demo.datasafe.dev, whose parent is a bare domain: same origin only.
+  const demo = 'https://demo.datasafe.dev/reg/access/';
+  assert.equal(pollOnPlatform('https://demo.datasafe.dev/reg/access/k1', demo), true);
+  assert.equal(pollOnPlatform('https://demo-account.datasafe.dev/reg/access/k1', demo), false);
+  assert.equal(pollOnPlatform('not a url', demo), false);
+});
 
 async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean, master?: boolean, extra?: Array<{ streamId: string, level: string }> } = {}) {
   const p = platform(opts);

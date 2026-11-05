@@ -60,6 +60,20 @@ const notConnected = (serviceInfoUrl: string): RequestCredentials => ({ apiEndpo
 
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 
+/**
+ * The poll URL the register hands back must stay on the platform: the access host itself, or (production, where
+ * access is `access.api.datasafe.dev` and the poll sits on the person's core, `core-ch1.api.datasafe.dev`) a host
+ * under the access host's parent domain, when that parent is not a bare registrable domain (3 labels or more).
+ */
+export function pollOnPlatform (poll: string, access: string): boolean {
+  let p: URL, a: URL;
+  try { p = new URL(poll); a = new URL(access); } catch { return false; }
+  if (p.origin === a.origin) return true;
+  if (p.protocol !== 'https:' || p.port !== '') return false;
+  const parent = a.hostname.split('.').slice(1);
+  return parent.length >= 3 && p.hostname.endsWith(`.${parent.join('.')}`);
+}
+
 export function rawMode (cfg: RawConfig) {
   const sessions = new Map<string, Session>();
   const doFetch = cfg.fetchFn ?? fetch;
@@ -244,7 +258,7 @@ export function rawMode (cfg: RawConfig) {
           const init = await r.json() as any;
           const authUrl: string | undefined = init.authUrl ?? init.url;
           if (init.status !== 'NEED_SIGNIN' || !authUrl?.startsWith('https://') ||
-              typeof init.poll !== 'string' || new URL(init.poll).origin !== new URL(access).origin) {
+              typeof init.poll !== 'string' || !pollOnPlatform(init.poll, access)) {
             throw new Error('sign-in request returned an unexpected answer');
           }
           s.pending = { pollUrl: init.poll, authUrl, permissions, deviceName, until: Date.now() + PENDING_TTL_MS };
