@@ -128,10 +128,16 @@ Confirm every item below with search_items / get_item before writing.
   Findings: finding-coded. Procedures: procedure-coded, else procedure-basic (name as printed).
   Treatments over time: treatment-coded, else treatment-basic. Each cites the visit with
   clientData.related.<visitId>: true.
-- Medications: medication-intake-coded or medication-prescription-coded; no coded match:
-  medication-intake-basic with the name as printed. drug.label = the name as printed, a brand not
-  translated; the regimen in intake (posology on a prescription): doseValue, doseUnit, route,
-  frequency, asNeeded, note. Ongoing use: duration null.
+- Medications: medication-prescription-coded or medication-intake-coded; no coded match: a
+  prescription goes to medication-prescription-basic (name as printed, optional posology), an
+  intake to medication-intake-basic (name as printed). drug.label = the name as printed, a brand
+  not translated; the regimen in intake (posology on a prescription): doseValue, doseUnit, route,
+  frequency, asNeeded, note, and either timeOfDay (["08:00"]) or when (printed moments such as
+  "breakfast", "after-meal"), never both; a planned course in bounds (duration + durationUnit, or
+  start / end). An intake with a duration is a period of use (duration null = still running),
+  without one it is a single dose. "Stopped because of side effects": stopReason on the closed
+  period, or a prescription with status "stopped", statusChanged and stopReason. Never write
+  status "skipped" on an intake yet (older patient apps count it as taken).
 - Lab values printed in the letter: see lab-report.
 Coded entries: list_datasources, then search_dataset({ datasource, query }) with condition,
 finding, medication, procedure or treatment. Copy the chosen entry's label, description, codes and
