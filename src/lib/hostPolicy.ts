@@ -30,6 +30,12 @@ export function platformOf (url: string): Platform {
 
 export const DEMO_SIGNUP_URL = 'https://demo-account.datasafe.dev/register';
 
+/** The HDS account panel (app-web-user-account) of each platform. */
+export const ACCOUNT_URL: Record<Platform, string> = {
+  production: 'https://account.hds.ngo/',
+  demo: 'https://demo-account.datasafe.dev/'
+};
+
 /** What the person must know about the platform, in words the model can repeat. */
 export function platformNote (platform: Platform): string {
   return platform === 'production'

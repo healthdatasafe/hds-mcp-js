@@ -113,3 +113,44 @@ test('report_problem: a prefilled agent-problem issue link with the version, not
   assert.match(url.searchParams.get('body') ?? '', /HDS MCP: \d+\.\d+\.\d+/);
   assert.match(res.content[0].text, /Nothing has been sent/);
 });
+
+test('open_account: the platform\'s account panel at the task page, username from access-info', async (t) => {
+  const { openAccountHandler } = await import('../src/tools/openAccount.ts');
+  const { runWithCredentials } = await import('../src/auth/session.ts');
+  const { buildServer } = await import('../src/server.ts');
+  const linkOf = (res: { content: Array<{ text: string }> }) => new URL(res.content[0].text.split('\n').pop()!);
+  const seen: string[] = [];
+  t.mock.method(globalThis, 'fetch', async (url: URL | string, init?: RequestInit) => {
+    seen.push(`${url} ${(init?.headers as Record<string, string>)?.Authorization}`);
+    return new Response(JSON.stringify({ type: 'app', user: { username: 'alice' } }), { status: 200 });
+  });
+
+  const prod = await runWithCredentials({ apiEndpoint: 'https://tok@core-us1-east.api.datasafe.dev/alice/', serviceInfoUrl: 'https://reg.api.datasafe.dev/service/info', prodWritesEnabled: true },
+    () => openAccountHandler({ task: 'change_password' }));
+  assert.equal(linkOf(prod).href, 'https://account.hds.ngo/change-password?username=alice');
+  assert.deepEqual(seen, ['https://core-us1-east.api.datasafe.dev/alice/access-info tok']);
+  assert.match(prod.content[0].text, /production platform.*"alice" is filled in.*Nothing has been changed/s);
+
+  const email = await runWithCredentials({ apiEndpoint: 'https://tok@demo.datasafe.dev/alice/', serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info', prodWritesEnabled: false },
+    () => openAccountHandler({ task: 'change_email' }));
+  assert.equal(linkOf(email).href, 'https://demo-account.datasafe.dev/account/profile?username=alice');
+
+  const reset = await runWithCredentials({ apiEndpoint: 'https://tok@demo.datasafe.dev/alice/', serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info', prodWritesEnabled: false },
+    () => openAccountHandler({ task: 'reset_password' }));
+  assert.match(reset.content[0].text, /enter their username, "alice"/);
+
+  // Not signed in yet (raw mode before connect): the platform's page, no username, no API call.
+  seen.length = 0;
+  const signedOut = await runWithCredentials({ apiEndpoint: '', serviceInfoUrl: 'https://reg.api.datasafe.dev/service/info', prodWritesEnabled: false },
+    () => openAccountHandler({ task: 'security' }));
+  assert.equal(linkOf(signedOut).href, 'https://account.hds.ngo/account/security');
+  assert.deepEqual(seen, []);
+
+  // access-info failing still gives the page.
+  t.mock.method(globalThis, 'fetch', async () => new Response('{}', { status: 403 }));
+  const failed = await runWithCredentials({ apiEndpoint: 'https://tok@demo.datasafe.dev/alice/', serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info', prodWritesEnabled: false },
+    () => openAccountHandler({ task: 'connected_apps' }));
+  assert.equal(linkOf(failed).href, 'https://demo-account.datasafe.dev/account/apps');
+
+  assert.match((buildServer({ http: true, oauth: true, platform: 'production' }).server as any)._instructions, /open_account/);
+});

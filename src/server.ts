@@ -18,6 +18,7 @@ import { reportMissingItemInput, reportMissingItemHandler } from './tools/report
 import { getImportGuideInput, getImportGuideHandler } from './tools/getImportGuide.ts';
 import { getConnectionInput, getConnectionHandler } from './tools/getConnection.ts';
 import { reportProblemInput, reportProblemHandler } from './tools/reportProblem.ts';
+import { openAccountInput, openAccountHandler } from './tools/openAccount.ts';
 import { extendWriteHint } from './http/stepUp.ts';
 import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
@@ -55,6 +56,8 @@ export function buildServer (
       ' Always look data up in the HDS data model (search_items, get_item) before writing it.' +
       ' To import someone\'s medical history (documents, lab reports, photos, spreadsheets, app exports), read get_import_guide first.' +
       ' When no item fits their data, tell them and offer report_missing_item; when this connector itself fails, offer report_problem.' +
+      ' Account tasks (email, password, two-step sign-in, connected apps, consents, exporting or deleting the account) are ' +
+      'done in the HDS account panel, not with these tools: call open_account and give the person its link.' +
       // OAuth: writes are consented per kind of data; a refused write is the person's consent, not a fault.
       (oauth
         ? ' The person consents per kind of data, and can widen it later. Before adding data, call get_connection: if the ' +
@@ -196,6 +199,13 @@ export function buildServer (
     'When this connector fails in a way the person cannot fix (a tool error, a refused sign-in, wrong behaviour), prepare a problem report for the HDS team: returns a prefilled GitHub issue link (site-agents, agent problem) for the person to open and post themselves; nothing is sent by this tool. Put only what was asked and the error as-is: never their health data, names, account name or links.',
     reportProblemInput,
     wrap(reportProblemHandler)
+  );
+
+  server.tool(
+    'open_account',
+    'When the person wants to change their email or password, reset a forgotten password, set up two-step sign-in, see or revoke connected apps, change consents, or export or delete their account: returns a link to the HDS account panel of this platform at that page, with their username filled in at sign-in when connected. The person does it there; nothing is changed by this tool.',
+    openAccountInput,
+    wrap(openAccountHandler)
   );
 
   // Raw HTTP mode adds its own connect / connect_status / disconnect.
