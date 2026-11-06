@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.19.1] - 2026-11-06
+
+### Fixed
+- Raw mode offers `ensure_streams` again: it was hidden on every HTTP session because OAuth grants never carry manage,
+  but raw mode's access is `*` at manage, so a write to an item whose stream did not exist yet could not be done.
+  Still hidden over OAuth.
+
 ## [0.19.0] - 2026-11-06
 
 ### Added
