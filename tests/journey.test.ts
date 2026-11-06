@@ -114,6 +114,14 @@ test('report_problem: a prefilled agent-problem issue link with the version, not
   assert.match(res.content[0].text, /Nothing has been sent/);
 });
 
+test('ensure_streams: offered in stdio and raw mode (manage), never over OAuth', async () => {
+  const { buildServer } = await import('../src/server.ts');
+  const has = (s: any) => 'ensure_streams' in s._registeredTools;
+  assert.equal(has(buildServer()), true);
+  assert.equal(has(buildServer({ http: true, platform: 'production' })), true);
+  assert.equal(has(buildServer({ http: true, oauth: true, platform: 'production' })), false);
+});
+
 test('open_account: the platform\'s account panel at the task page, username from access-info', async (t) => {
   const { openAccountHandler } = await import('../src/tools/openAccount.ts');
   const { runWithCredentials } = await import('../src/auth/session.ts');

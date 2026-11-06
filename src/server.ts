@@ -107,8 +107,8 @@ export function buildServer (
     wrap(importBatchHandler)
   );
 
-  // Not over HTTP: OAuth grants never carry manage, so stream creation is always refused there.
-  if (!http) {
+  // Not over OAuth: its grants never carry manage, so stream creation is always refused there. Raw mode holds manage.
+  if (!oauth) {
     server.tool(
       'ensure_streams',
       'Create the streams the given HDS items need in the connected account, with their data-model names, parents first (call before writing to items whose streams may not exist yet). Needs manage on the root. Refuses on production until the production-write gate is opened.',

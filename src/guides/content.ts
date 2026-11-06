@@ -41,7 +41,8 @@ attachment this MCP cannot upload): say so; store the values you extract, they k
   Production writes: connect({ host: "prod", enableWrites: true, ... }), only if they asked.
 - Remote connector: no ensure_streams. The patient signed in through the connector; their client
   asks them for write consent on each data root at the first write. Raw address (.../raw, no
-  client ID): connect() gives a sign-in link for them to open, then connect_status().
+  client ID): connect() gives a sign-in link for them to open, then connect_status(), then
+  ensure_streams({ items }) before writing.
 
 ## 4. Item first
 For each kind of data: search_items, then get_item; use its streamId, eventType and content

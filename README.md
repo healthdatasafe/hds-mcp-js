@@ -105,7 +105,7 @@ That's it. The connection lasts until you quit Claude Desktop.
 
 ## What the tools do
 
-The MCP exposes fourteen tools to your agent. **You don't call them directly —**
+The MCP exposes fifteen tools to your agent. **You don't call them directly —**
 you just ask your agent in plain language. The agent picks the right tool.
 
 | Tool | What it does | Plain-language prompt |
@@ -124,6 +124,7 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `ensure_streams` | Create the data containers an item needs before writing | *(the agent does this itself before an import)* |
 | `update_event` | Fix one event in place | *"That weight should be 71.9, not 71.5."* |
 | `delete_events` | Remove events, or everything one import wrote; shows the list first | *"Remove everything the health-files import wrote."* |
+| `open_account` | Link to the HDS account panel for account tasks, your username filled in | *"I want to change my email."* |
 
 ---
 
