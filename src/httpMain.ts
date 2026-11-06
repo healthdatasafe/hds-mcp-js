@@ -4,7 +4,8 @@ import { createHttpApp } from './http/app.ts';
 import { exchangeVerifier } from './http/exchange.ts';
 import { introspectionVerifier } from './http/introspection.ts';
 import { rawMode } from './http/raw.ts';
-import { perUserHost } from './http/perUser.ts';
+import { addressedAccount } from './http/perUser.ts';
+import { adapterBasePath } from './http/paths.ts';
 import { httpMethods, initHttpObservability } from './http/observability.ts';
 import { version } from './server.ts';
 import { platformOf, resolveServiceInfoUrl } from './lib/hostPolicy.ts';
@@ -31,8 +32,9 @@ const tokenExchange = process.env.HDS_MCP_TOKEN_EXCHANGE === 'true';
 if (platformOf(serviceInfoUrl) === 'production' && !tokenExchange) {
   throw new Error('A production MCP needs HDS_MCP_TOKEN_EXCHANGE=true (token passthrough is demo only)');
 }
-// Per-user addresses (plan 118 PER-USER-ADDRESS.md), e.g. "api.datasafe.dev": the core's exchange checks the
-// per-user audience (R10), introspection here only knows the configured one.
+// Per-user addresses (plan 118 PER-USER-ADDRESS.md), e.g. "api.datasafe.dev", behind a core of rc.75 or later (R11
+// sets the addressing headers): the core's exchange checks the per-user audience (R10), introspection here only knows
+// the configured one.
 const perUserDomain = process.env.HDS_MCP_PER_USER_DOMAIN?.trim().toLowerCase() || undefined;
 if (perUserDomain && !tokenExchange) throw new Error('HDS_MCP_PER_USER_DOMAIN needs HDS_MCP_TOKEN_EXCHANGE=true');
 const secretEndpoint = tokenExchange ? oauthMetadata.token_endpoint : oauthMetadata.introspection_endpoint;
@@ -55,10 +57,7 @@ const raw = process.env.HDS_MCP_RAW === 'true'
   ? rawMode({
     serviceInfoUrl,
     allowedHosts: [publicUrl.host, `${publicUrl.hostname}:${publicUrl.port || 443}`],
-    perUserLabel: (host) => {
-      const h = perUserHost(host, perUserDomain);
-      return h && h !== publicUrl.host ? h.split('.')[0] : null;
-    }
+    perUserLabel: (headers) => addressedAccount(headers, perUserDomain, adapterBasePath(publicUrl.pathname))?.name ?? null
   })
   : null;
 

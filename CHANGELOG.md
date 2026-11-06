@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+- Per-user addresses follow the core's addressing (open-pryv.io R11, rc.75): the account and base come from the
+  `X-Adapter-Name` / `X-Adapter-Base` headers the core sets, no longer from the Host. The manifest adds `baseTemplate`.
+
+### Added
+- Token exchange sends `subject_token_resource` (open-pryv.io R10, rc.75; older cores ignore it): the address the token
+  was presented at, the region address or the per-user one, so the core refuses a token issued for another
+  address. Exchange answers are cached by token and resource.
+
 ## [0.17.0] - 2026-11-06
 
 ### Added

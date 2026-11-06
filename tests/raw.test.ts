@@ -70,7 +70,7 @@ async function start (opts: { name?: string, expires?: number | null, deleteStat
     fetchFn: p.fetchFn,
     ...(opts.master ? {} : { permissions: async () => PERMS }),
     // The test server's own host stands for this username.
-    ...(opts.perUser ? { perUserLabel: (h: string) => (allowedHosts.includes(h) ? opts.perUser! : null) } : {})
+    ...(opts.perUser ? { perUserLabel: (h: http.IncomingHttpHeaders) => (allowedHosts.includes(h.host ?? '') ? opts.perUser! : null) } : {})
   });
   const app = createHttpApp({
     publicUrl: new URL('http://127.0.0.1/adapter/mcp/mcp'),

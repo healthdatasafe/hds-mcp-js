@@ -2,14 +2,14 @@ import express, { type Request, type Response, type NextFunction } from 'express
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import { mcpAuthMetadataRouter, getOAuthProtectedResourceMetadataUrl } from '@modelcontextprotocol/sdk/server/auth/router.js';
-import type { OAuthTokenVerifier } from '@modelcontextprotocol/sdk/server/auth/provider.js';
 import type { OAuthMetadata } from '@modelcontextprotocol/sdk/shared/auth.js';
 import { buildServer, packageName, version } from '../server.ts';
 import { runWithCredentials, type RequestCredentials } from '../auth/session.ts';
 import { safeLog } from '../lib/scrubber.ts';
+import type { ResourceTokenVerifier } from './exchange.ts';
 import { observabilityTiming, type HttpObservability } from './observability.ts';
 import { adapterBasePath } from './paths.ts';
-import { perUserHost, perUserTemplate } from './perUser.ts';
+import { addressedAccount, perUserTemplate } from './perUser.ts';
 import { isWriteCall, missingWriteScopes } from './stepUp.ts';
 import { loadPack } from '../dataModel/pack.ts';
 import type { Platform } from '../lib/hostPolicy.ts';
@@ -17,7 +17,7 @@ import type { Platform } from '../lib/hostPolicy.ts';
 export interface HttpAppConfig {
   publicUrl: URL;
   oauthMetadata: OAuthMetadata;
-  verifier: OAuthTokenVerifier;
+  verifier: ResourceTokenVerifier;
   allowedOrigins: string[];
   /** Aggregate telemetry (hds-observability-js); omitted or null when disabled. */
   observability?: { obs: HttpObservability, methods: readonly string[] } | null;
@@ -29,7 +29,7 @@ export interface HttpAppConfig {
   platform?: Platform;
   /** Raw mode (sign in by link, no OAuth), mounted at `<base>raw`; omitted or null when disabled. */
   raw?: { mount (app: express.Express, path: string): void } | null;
-  /** Per-user addresses on `<username>.<perUserDomain>` (perUser.ts); omitted when off. */
+  /** Per-user addresses on `<username>.<perUserDomain>`, addressed by the core's headers (perUser.ts); omitted when off. */
   perUserDomain?: string;
 }
 
@@ -58,6 +58,7 @@ export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMe
     // Per-user addresses: the account app fills {username} (the region addresses above keep working).
     ...(cfg.perUserDomain
       ? {
+          baseTemplate: perUserTemplate(cfg.perUserDomain, base),
           mcpEndpointTemplate: perUserTemplate(cfg.perUserDomain, cfg.publicUrl.pathname),
           ...(cfg.raw ? { rawEndpointTemplate: perUserTemplate(cfg.perUserDomain, `${base}raw`) } : {})
         }
@@ -96,22 +97,19 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
   app.use(originCheck(cfg.allowedOrigins));
   cfg.raw?.mount(app, `${base}raw`);
   const scopesSupported = cfg.scopesSupported?.length ? cfg.scopesSupported : undefined;
-  // The resource is the per-user host the request came in on, else the configured address (whose host is one label
-  // under the domain too, e.g. auth-ch, and stays the region address).
-  const perUserOf = (req: Request): string | null => {
-    const host = perUserHost(req.headers.host, cfg.perUserDomain);
-    return host && host !== cfg.publicUrl.host ? host : null;
+  // The resource is the per-user base the core addressed + the MCP path's last segment; on a platform address (no
+  // headers) it is the configured region address, which existing connectors keep using (R10 D4).
+  const perUserResource = (req: Request): URL | null => {
+    const addressed = addressedAccount(req.headers, cfg.perUserDomain, base);
+    return addressed ? new URL(path.slice(base.length), addressed.base) : null;
   };
-  const resourceOf = (req: Request): URL => {
-    const host = perUserOf(req);
-    return host ? new URL(`https://${host}${path}`) : cfg.publicUrl;
-  };
+  const resourceOf = (req: Request): URL => perUserResource(req) ?? cfg.publicUrl;
   if (cfg.perUserDomain) {
     // RFC 9728 metadata naming the per-user resource (same members as the SDK router below).
     app.get(`/.well-known/oauth-protected-resource${path}`, (req: Request, res: Response, next: NextFunction) => {
       res.vary('Host');
-      if (!perUserOf(req)) { next(); return; }
-      const resource = resourceOf(req);
+      const resource = perUserResource(req);
+      if (!resource) { next(); return; }
       res.set('Access-Control-Allow-Origin', '*').json({
         resource: resource.href,
         authorization_servers: [cfg.oauthMetadata.issuer],
@@ -131,9 +129,13 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(cfg.publicUrl)
   });
   const auth = (req: Request, res: Response, next: NextFunction) => {
-    if (!perUserOf(req)) return defaultAuth(req, res, next);
+    const resource = perUserResource(req);
+    if (!resource) return defaultAuth(req, res, next);
     res.vary('Host');
-    return requireBearerAuth({ verifier: cfg.verifier, resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceOf(req)) })(req, res, next);
+    return requireBearerAuth({
+      verifier: { verifyAccessToken: (token: string) => cfg.verifier.verifyAccessToken(token, resource) },
+      resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resource)
+    })(req, res, next);
   };
 
   app.post(path, express.json({ limit: '4mb' }), auth, async (req: Request, res: Response) => {

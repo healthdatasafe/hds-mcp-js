@@ -1,4 +1,5 @@
 import { randomBytes } from 'node:crypto';
+import type { IncomingHttpHeaders } from 'node:http';
 import express, { type Request, type Response } from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
@@ -34,10 +35,10 @@ export interface RawConfig {
   serviceInfoUrl: string;
   allowedHosts: string[];
   /**
-   * Per-user addresses (perUser.ts): the username a host stands for, or null. A session started on such a host is
-   * pinned to it and accepts only that account's sign-in.
+   * Per-user addresses (perUser.ts): the name a request addresses, or null. A session started on such an address is
+   * pinned to its host and accepts only that account's sign-in.
    */
-  perUserLabel?: (host: string) => string | null;
+  perUserLabel?: (headers: IncomingHttpHeaders) => string | null;
   fetchFn?: typeof fetch;
   /** For tests; deployments ask for the master access `*` at manage. */
   permissions?: () => Promise<RequestedPermission[]>;
@@ -309,9 +310,10 @@ export function rawMode (cfg: RawConfig) {
     };
   }
 
-  function newSession (host?: string): Session {
+  function newSession (headers: IncomingHttpHeaders): Session {
     const s = {} as Session;
-    const label = host ? cfg.perUserLabel?.(host) ?? null : null;
+    const host = headers.host;
+    const label = cfg.perUserLabel?.(headers) ?? null;
     if (label) s.userLabel = label;
     const allowedHosts = label && host ? [host.toLowerCase()] : cfg.allowedHosts;
     s.created = s.lastSeen = Date.now();
@@ -357,7 +359,7 @@ export function rawMode (cfg: RawConfig) {
         }
         await drop(idle[0], idle[1]);
       }
-      s = newSession(req.headers.host);
+      s = newSession(req.headers);
       await s.server.connect(s.transport);
     }
     s.lastSeen = Date.now();

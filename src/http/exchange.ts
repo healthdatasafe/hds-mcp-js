@@ -7,11 +7,16 @@ import { apiCredentials } from './introspection.ts';
 const TOKEN_EXCHANGE = 'urn:ietf:params:oauth:grant-type:token-exchange';
 const ACCESS_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
 
+/** A verifier told where the token was presented (a per-user address, perUser.ts); the configured address otherwise. */
+export interface ResourceTokenVerifier extends OAuthTokenVerifier {
+  verifyAccessToken (token: string, resource?: URL): Promise<AuthInfo>;
+}
+
 export interface ExchangeConfig {
   tokenEndpoint: string;
   clientId: string;
   clientSecret: string;
-  // This MCP's public URL, reported as the token's resource.
+  // This MCP's public URL (the region address): the resource when the request names no other.
   resourceUrl: URL;
   serviceInfoUrl: string;
   cacheMs?: number;
@@ -34,23 +39,32 @@ interface ExchangeResponse {
  * Validates bearer tokens by exchanging them at the core (RFC 8693, plan 118 item 6, PY1 design R7): the core checks
  * the connector's token and its audience, and returns a derived token of the same grant that the API accepts. The
  * tools call the API with the derived token; the connector's token never reaches the data API.
+ * `subject_token_resource` (R10 W23-W24, rc.75; ignored by older cores) names where the token was presented: the core
+ * refuses a token issued for another address, so a token for alice's address does not work at bob's.
  */
-export function exchangeVerifier (cfg: ExchangeConfig): OAuthTokenVerifier {
+export function exchangeVerifier (cfg: ExchangeConfig): ResourceTokenVerifier {
   const cache = new Map<string, { info: AuthInfo; until: number }>();
   const cacheMs = cfg.cacheMs ?? 60_000;
   const doFetch = cfg.fetchFn ?? fetch;
   const basic = 'Basic ' + Buffer.from(`${encodeURIComponent(cfg.clientId)}:${encodeURIComponent(cfg.clientSecret)}`).toString('base64');
 
   return {
-    async verifyAccessToken (token: string): Promise<AuthInfo> {
+    async verifyAccessToken (token: string, resource: URL = cfg.resourceUrl): Promise<AuthInfo> {
       const now = Date.now();
-      const hit = cache.get(token);
+      // By token and resource: an answer for one address is never served at another.
+      const key = `${resource.href} ${token}`;
+      const hit = cache.get(key);
       if (hit && hit.until > now) return hit.info;
 
       const res = await doFetch(cfg.tokenEndpoint, {
         method: 'POST',
         headers: { authorization: basic, 'content-type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ grant_type: TOKEN_EXCHANGE, subject_token: token, subject_token_type: ACCESS_TOKEN_TYPE }).toString(),
+        body: new URLSearchParams({
+          grant_type: TOKEN_EXCHANGE,
+          subject_token: token,
+          subject_token_type: ACCESS_TOKEN_TYPE,
+          subject_token_resource: resource.href
+        }).toString(),
         // A redirect would re-post the subject token off the issuer's host.
         redirect: 'error',
         signal: AbortSignal.timeout(cfg.timeoutMs ?? 10_000)
@@ -79,11 +93,11 @@ export function exchangeVerifier (cfg: ExchangeConfig): OAuthTokenVerifier {
         clientId: 'connector',
         scopes: body.scope ? body.scope.split(' ') : [],
         expiresAt,
-        resource: cfg.resourceUrl,
+        resource,
         extra: { credentials }
       };
       for (const [k, v] of cache) if (v.until <= now) cache.delete(k);
-      cache.set(token, { info, until: Math.min(now + cacheMs, expiresAt * 1000) });
+      cache.set(key, { info, until: Math.min(now + cacheMs, expiresAt * 1000) });
       return info;
     }
   };

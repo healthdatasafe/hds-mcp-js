@@ -7,7 +7,7 @@ import { InvalidTokenError, ServerError } from '@modelcontextprotocol/sdk/server
 import { createHttpApp } from '../src/http/app.ts';
 import { exchangeVerifier } from '../src/http/exchange.ts';
 import { introspectionVerifier } from '../src/http/introspection.ts';
-import { perUserHost } from '../src/http/perUser.ts';
+import { addressedAccount } from '../src/http/perUser.ts';
 import { httpMethods, initHttpObservability } from '../src/http/observability.ts';
 
 // A fake core API: answers batch calls with the token it received, so each user can see whose token was used.
@@ -159,23 +159,32 @@ test('sidecar under /adapter/mcp/: manifest, status and the MCP under the base, 
   } finally { s.close(); }
 });
 
-test('perUserHost: one label under the domain, no port, nothing else', () => {
-  assert.equal(perUserHost('alice.api.datasafe.dev', 'api.datasafe.dev'), 'alice.api.datasafe.dev');
-  assert.equal(perUserHost('Alice-2.API.datasafe.dev', 'api.datasafe.dev'), 'alice-2.api.datasafe.dev');
-  assert.equal(perUserHost('api.datasafe.dev', 'api.datasafe.dev'), null);
-  assert.equal(perUserHost('a.b.api.datasafe.dev', 'api.datasafe.dev'), null);
-  assert.equal(perUserHost('alice.api.datasafe.dev:8443', 'api.datasafe.dev'), null);
-  assert.equal(perUserHost('alice.api.datasafe.dev.evil.test', 'api.datasafe.dev'), null);
-  assert.equal(perUserHost('-x.api.datasafe.dev', 'api.datasafe.dev'), null);
-  assert.equal(perUserHost('alice.api.datasafe.dev', undefined), null);
-  assert.equal(perUserHost(undefined, 'api.datasafe.dev'), null);
+test('addressedAccount: the core\'s two headers, https://<name>.<domain><base> only, per-user on', () => {
+  const d = 'api.datasafe.dev';
+  const b = '/adapter/mcp/';
+  const h = (name: string, base: string) => ({ 'x-adapter-name': name, 'x-adapter-base': base });
+  assert.deepEqual(addressedAccount(h('alice', 'https://alice.api.datasafe.dev/adapter/mcp/'), d, b),
+    { name: 'alice', base: 'https://alice.api.datasafe.dev/adapter/mcp/' });
+  assert.deepEqual(addressedAccount(h('alice-2', 'https://alice-2.api.datasafe.dev/adapter/mcp/'), d, b)?.name, 'alice-2');
+  assert.equal(addressedAccount(h('alice', 'https://alice.api.datasafe.dev/adapter/mcp/'), undefined, b), null, 'per-user off');
+  assert.equal(addressedAccount({}, d, b), null, 'platform address');
+  assert.equal(addressedAccount({ 'x-adapter-base': 'https://alice.api.datasafe.dev/adapter/mcp/' }, d, b), null);
+  assert.equal(addressedAccount(h('bob', 'https://alice.api.datasafe.dev/adapter/mcp/'), d, b), null, 'name and host disagree');
+  assert.equal(addressedAccount(h('alice', 'http://alice.api.datasafe.dev/adapter/mcp/'), d, b), null);
+  assert.equal(addressedAccount(h('alice', 'https://alice.api.datasafe.dev:8443/adapter/mcp/'), d, b), null);
+  assert.equal(addressedAccount(h('alice', 'https://alice.api.datasafe.dev/adapter/other/'), d, b), null);
+  assert.equal(addressedAccount(h('alice', 'https://alice.api.datasafe.dev.evil.test/adapter/mcp/'), d, b), null);
+  assert.equal(addressedAccount(h('alice', 'https://x@alice.api.datasafe.dev/adapter/mcp/'), d, b), null);
+  assert.equal(addressedAccount(h('a.b', 'https://a.b.api.datasafe.dev/adapter/mcp/'), d, b), null);
+  assert.equal(addressedAccount(h('Alice', 'https://alice.api.datasafe.dev/adapter/mcp/'), d, b), null, 'the core lowercases');
+  assert.equal(addressedAccount(h('alice', 'not a url'), d, b), null);
 });
 
-// GET / POST with a chosen Host header (fetch may not send one).
-function hostRequest (base: string, path: string, host: string, method = 'GET', body?: string) {
+// GET / POST with a chosen Host header (fetch may not send one) and extra headers.
+function hostRequest (base: string, path: string, host: string, method = 'GET', body?: string, extra: Record<string, string> = {}) {
   return new Promise<{ status: number, headers: http.IncomingHttpHeaders, body: string }>((resolve, reject) => {
     const u = new URL(base);
-    const r = http.request({ hostname: u.hostname, port: u.port, path, method, headers: { host, 'content-type': 'application/json', ...(body ? { 'content-length': Buffer.byteLength(body) } : {}) } }, (res) => {
+    const r = http.request({ hostname: u.hostname, port: u.port, path, method, headers: { host, 'content-type': 'application/json', ...extra, ...(body ? { 'content-length': Buffer.byteLength(body) } : {}) } }, (res) => {
       let data = '';
       res.on('data', (c) => { data += c; });
       res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: data }));
@@ -185,7 +194,8 @@ function hostRequest (base: string, path: string, host: string, method = 'GET', 
   });
 }
 
-test('per-user addresses: metadata and challenges name the host the request came in on, the region address is unchanged', async () => {
+test('per-user addresses: metadata, challenges and the verified resource follow X-Adapter-Base; the region address is unchanged', async () => {
+  const presented: Array<string | undefined> = [];
   const app = createHttpApp({
     publicUrl: new URL('https://auth-ch.api.datasafe.dev/adapter/mcp/mcp'),
     oauthMetadata: { issuer: 'https://auth-ch.api.datasafe.dev', authorization_endpoint: 'https://auth-ch.api.datasafe.dev/a', token_endpoint: 'https://auth-ch.api.datasafe.dev/t', response_types_supported: ['code'] },
@@ -193,13 +203,14 @@ test('per-user addresses: metadata and challenges name the host the request came
     scopesSupported: ['offline_access'],
     perUserDomain: 'api.datasafe.dev',
     raw: { mount () {} },
-    verifier: { async verifyAccessToken () { throw new InvalidTokenError('Token is not active'); } }
+    verifier: { async verifyAccessToken (_t: string, resource?: URL) { presented.push(resource?.href); throw new InvalidTokenError('Token is not active'); } }
   });
   const s = http.createServer(app);
   const base = await listen(s);
   const prm = '/.well-known/oauth-protected-resource/adapter/mcp/mcp';
+  const alice = { 'x-adapter-name': 'alice', 'x-adapter-base': 'https://alice.api.datasafe.dev/adapter/mcp/' };
   try {
-    const mine = await hostRequest(base, prm, 'alice.api.datasafe.dev');
+    const mine = await hostRequest(base, prm, 'alice.api.datasafe.dev', 'GET', undefined, alice);
     assert.equal(mine.status, 200);
     assert.deepEqual(JSON.parse(mine.body), {
       resource: 'https://alice.api.datasafe.dev/adapter/mcp/mcp',
@@ -208,21 +219,23 @@ test('per-user addresses: metadata and challenges name the host the request came
       resource_name: 'Health Data Safe'
     });
     assert.match(String(mine.headers.vary), /host/i);
-    // The region host is one label under the domain too: it keeps the SDK's metadata.
-    const region = await hostRequest(base, prm, 'auth-ch.api.datasafe.dev');
-    assert.equal(JSON.parse(region.body).resource, 'https://auth-ch.api.datasafe.dev/adapter/mcp/mcp');
-    assert.equal(JSON.parse(region.body).resource_name, 'Health Data Safe');
-    const other = await hostRequest(base, prm, 'evil.test');
-    assert.equal(JSON.parse(other.body).resource, 'https://auth-ch.api.datasafe.dev/adapter/mcp/mcp');
+    // A platform address carries no headers: the SDK's metadata for the region address, whatever the Host.
+    for (const host of ['auth-ch.api.datasafe.dev', 'alice.api.datasafe.dev', 'evil.test']) {
+      const region = await hostRequest(base, prm, host);
+      assert.equal(JSON.parse(region.body).resource, 'https://auth-ch.api.datasafe.dev/adapter/mcp/mcp', host);
+      assert.equal(JSON.parse(region.body).resource_name, 'Health Data Safe');
+    }
 
-    const denied = await hostRequest(base, '/adapter/mcp/mcp', 'alice.api.datasafe.dev', 'POST', '{}');
+    const denied = await hostRequest(base, '/adapter/mcp/mcp', 'alice.api.datasafe.dev', 'POST', '{}', { ...alice, authorization: 'Bearer t' });
     assert.equal(denied.status, 401);
     assert.match(String(denied.headers['www-authenticate']), /resource_metadata="https:\/\/alice\.api\.datasafe\.dev\/\.well-known\/oauth-protected-resource\/adapter\/mcp\/mcp"/);
-    const deniedRegion = await hostRequest(base, '/adapter/mcp/mcp', 'auth-ch.api.datasafe.dev', 'POST', '{}');
+    const deniedRegion = await hostRequest(base, '/adapter/mcp/mcp', 'auth-ch.api.datasafe.dev', 'POST', '{}', { authorization: 'Bearer t' });
     assert.match(String(deniedRegion.headers['www-authenticate']), /resource_metadata="https:\/\/auth-ch\.api\.datasafe\.dev\//);
+    assert.deepEqual(presented, ['https://alice.api.datasafe.dev/adapter/mcp/mcp', undefined], 'the verifier is told the per-user resource');
 
-    const m = JSON.parse((await hostRequest(base, '/adapter/mcp/manifest.json', 'alice.api.datasafe.dev')).body);
+    const m = JSON.parse((await hostRequest(base, '/adapter/mcp/manifest.json', 'alice.api.datasafe.dev', 'GET', undefined, alice)).body);
     assert.equal(m.mcpEndpoint, 'https://auth-ch.api.datasafe.dev/adapter/mcp/mcp');
+    assert.equal(m.baseTemplate, 'https://{username}.api.datasafe.dev/adapter/mcp/');
     assert.equal(m.mcpEndpointTemplate, 'https://{username}.api.datasafe.dev/adapter/mcp/mcp');
     assert.equal(m.rawEndpointTemplate, 'https://{username}.api.datasafe.dev/adapter/mcp/raw');
   } finally { s.close(); }
@@ -377,12 +390,29 @@ test('exchangeVerifier: exchanges the connector token, calls the API with the de
   assert.ok(Math.abs(info.expiresAt! - (Date.now() / 1000 + 1200)) < 5);
   assert.equal(seen[0].auth, 'Basic ' + Buffer.from('mcp:s').toString('base64'));
   assert.equal(seen[0].redirect, 'error');
-  assert.deepEqual([...seen[0].form.keys()].sort(), ['grant_type', 'subject_token', 'subject_token_type']);
+  assert.deepEqual([...seen[0].form.keys()].sort(), ['grant_type', 'subject_token', 'subject_token_resource', 'subject_token_type']);
   assert.equal(seen[0].form.get('grant_type'), 'urn:ietf:params:oauth:grant-type:token-exchange');
   assert.equal(seen[0].form.get('subject_token'), 'subject');
   assert.equal(seen[0].form.get('subject_token_type'), 'urn:ietf:params:oauth:token-type:access_token');
+  assert.equal(seen[0].form.get('subject_token_resource'), 'https://mcp.demo.datasafe.dev/mcp', 'the region address by default');
+  assert.equal(info.resource?.href, 'https://mcp.demo.datasafe.dev/mcp');
   await v.verifyAccessToken('subject');
   assert.equal(seen.length, 1, 'second call served from the cache');
+});
+
+test('exchangeVerifier: a per-user resource is sent as subject_token_resource and cached apart', async () => {
+  const seen: Array<{ auth: string; form: URLSearchParams; redirect?: string }> = [];
+  const v = exchangeWith({ subject: { status: 200, body: derivedOk } }, seen);
+  const alice = new URL('https://alice.api.datasafe.dev/adapter/mcp/mcp');
+  const info = await v.verifyAccessToken('subject', alice);
+  assert.equal(seen[0].form.get('subject_token_resource'), alice.href);
+  assert.equal(info.resource?.href, alice.href);
+  await v.verifyAccessToken('subject', alice);
+  assert.equal(seen.length, 1, 'same token, same resource: cached');
+  await v.verifyAccessToken('subject', new URL('https://bob.api.datasafe.dev/adapter/mcp/mcp'));
+  await v.verifyAccessToken('subject');
+  assert.deepEqual(seen.map((x) => x.form.get('subject_token_resource')),
+    [alice.href, 'https://bob.api.datasafe.dev/adapter/mcp/mcp', 'https://mcp.demo.datasafe.dev/mcp'], 'another resource is asked again');
 });
 
 test('exchangeVerifier: dead or foreign subject → invalid token; operator faults and bad answers → server error', async () => {

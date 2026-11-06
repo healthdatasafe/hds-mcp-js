@@ -222,12 +222,15 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   no host argument, never log sign-in or poll URLs, never return a token to the model. Raw `connect` /
   `connect_status` / `disconnect` are added through `buildServer({ extraTools })`.
 - **Per-user addresses** ([`src/http/perUser.ts`](src/http/perUser.ts), `HDS_MCP_PER_USER_DOMAIN=api.datasafe.dev`,
-  needs `HDS_MCP_TOKEN_EXCHANGE=true`; plan 118 PER-USER-ADDRESS.md, core R10): a request on
-  `<username>.<domain>` (one label, no port; the core keeps the client's Host; the configured region host excluded)
-  gets its RFC 9728 metadata and 401 / 403 `resource_metadata` (`Vary: Host`); a raw-mode session started there is
-  pinned to that host and refuses (and deletes) an access of any other account. The manifest adds
-  `mcpEndpointTemplate` / `rawEndpointTemplate` with `{username}`. For OAuth, which account may use the address is
-  the core's check (R10: the signed-in account only, at sign-in and at the exchange); the region address keeps working.
+  needs `HDS_MCP_TOKEN_EXCHANGE=true` and a core of rc.75 or later; plan 118 PER-USER-ADDRESS.md, core R10 + R11): on
+  a per-user address the core sets `X-Adapter-Name` / `X-Adapter-Base` (stripping client copies; none on the region
+  address). The resource is `X-Adapter-Base` + `mcp`, honoured only as `https://<name>.<domain>/adapter/mcp/`: its
+  RFC 9728 metadata, 401 / 403 `resource_metadata` (`Vary: Host`), and `subject_token_resource` on the exchange (the
+  core refuses a token issued for another address; the exchange cache is keyed by token + resource). A raw-mode
+  session started there is pinned to that host and refuses (and deletes) an access of any other account than
+  `X-Adapter-Name`. The manifest adds `baseTemplate` / `mcpEndpointTemplate` / `rawEndpointTemplate` with
+  `{username}`. Which account may use the address is the core's check (R10: the signed-in account only, at sign-in and
+  at the exchange); the region address keeps working as the legacy resource (R10 D4). Never test the Host here.
 
 **Deploy.** CI-built image `ghcr.io/healthdatasafe/hds-mcp-js` (built on a `vX.Y.Z` tag by
 `.github/workflows/build-image.yml`, deployed with `infra/dev-deploy/dokku/deploy-image.sh`), running
