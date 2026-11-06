@@ -18,6 +18,7 @@ import { reportMissingItemInput, reportMissingItemHandler } from './tools/report
 import { getImportGuideInput, getImportGuideHandler } from './tools/getImportGuide.ts';
 import { getConnectionInput, getConnectionHandler } from './tools/getConnection.ts';
 import { reportProblemInput, reportProblemHandler } from './tools/reportProblem.ts';
+import { extendWriteHint } from './http/stepUp.ts';
 import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
 
@@ -44,7 +45,7 @@ export const { name: packageName, version } = JSON.parse(
 const PRIVACY_DISCLOSURE = 'Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).';
 
 export function buildServer (
-  { http = false, extraTools, platform }: { http?: boolean; extraTools?: (server: McpServer) => void; platform?: Platform } = {}
+  { http = false, oauth = false, extraTools, platform }: { http?: boolean; oauth?: boolean; extraTools?: (server: McpServer) => void; platform?: Platform } = {}
 ): McpServer {
   const server = new McpServer({
     name: 'hds-mcp',
@@ -54,6 +55,12 @@ export function buildServer (
       ' Always look data up in the HDS data model (search_items, get_item) before writing it.' +
       ' To import someone\'s medical history (documents, lab reports, photos, spreadsheets, app exports), read get_import_guide first.' +
       ' When no item fits their data, tell them and offer report_missing_item; when this connector itself fails, offer report_problem.' +
+      // OAuth: writes are consented per kind of data; a refused write is the person's consent, not a fault.
+      (oauth
+        ? ' The person consents per kind of data, and can widen it later. Before adding data, call get_connection: if the ' +
+          'kind of data is not in what this connection may add to, tell the person which one the request needs and how to ' +
+          'grant it, then wait. A write refused as Forbidden / insufficient_scope means the same, not a fault. ' + extendWriteHint([])
+        : '') +
       // The remote MCP serves one platform; stdio connects to demo unless asked for prod.
       (platform
         ? ` ${platformNote(platform)} Tell the person which platform this is before the first read.`

@@ -10,8 +10,15 @@ export interface RequestCredentials {
   apiEndpoint: string;
   serviceInfoUrl: string;
   prodWritesEnabled: boolean;
+  /** OAuth: the scopes the person consented to (raw mode and stdio have none: their access is not scoped this way). */
+  scopes?: string[];
 }
 const requestCredentials = new AsyncLocalStorage<RequestCredentials>();
+
+/** The OAuth scopes of this request, or null outside an OAuth request. */
+export function getGrantedScopes (): string[] | null {
+  return requestCredentials.getStore()?.scopes ?? null;
+}
 
 /** Runs `fn` with these credentials for every tool call it makes (HTTP transport). */
 export function runWithCredentials<T> (creds: RequestCredentials, fn: () => T): T {

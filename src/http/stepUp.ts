@@ -26,6 +26,44 @@ export function isWriteCall (body: any): boolean {
 const canWrite = (scopes: Set<string>, id: string) =>
   scopes.has(`hds/stream/${id}.contribute`) || scopes.has(`hds/stream/${id}.manage`);
 
+function rootName (node: { id: string; name?: unknown }): string {
+  const n = node.name as string | { en?: string } | undefined;
+  return (typeof n === 'string' ? n : n?.en) ?? node.id;
+}
+
+/**
+ * How the person extends a connection to writes (perki 2026-11-06: uploading is the first use case, and clients
+ * that ignore the step-up challenge, e.g. Claude.ai, only show "Forbidden"). The MCP advertises write scopes, so
+ * reconnecting brings the consent screen back with them.
+ */
+export function extendWriteHint (names: string[]): string {
+  return `To add data${names.length ? ` to ${names.map((n) => `"${n}"`).join(', ')}` : ''}, the person reconnects the ` +
+    'HDS connector in their AI assistant\'s connector settings (disconnect, then connect) and, on the HDS consent ' +
+    `screen, keeps "Add and modify${names.length === 1 ? ` ${names[0]}` : ''}" ticked. Do not retry the write before they have.`;
+}
+
+/** The model roots this connection may add to and those it may only read, by name. */
+export function writeAccess (tokenScopes: string[], pack: DataModelPack): { write: string[]; readOnly: string[] } {
+  const scopes = new Set(tokenScopes);
+  const write: string[] = [];
+  const readOnly: string[] = [];
+  for (const root of (pack.streams ?? []) as Array<StreamNode & { name?: unknown }>) {
+    if (canWrite(scopes, root.id)) write.push(rootName(root));
+    else if (scopes.has(`hds/stream/${root.id}.read`)) readOnly.push(rootName(root));
+  }
+  return { write, readOnly };
+}
+
+/** Root names for `hds/stream/<root>.contribute` scopes, for the messages above. */
+export function rootNames (scopes: string[], pack: DataModelPack): string[] {
+  const roots = (pack.streams ?? []) as Array<StreamNode & { name?: unknown }>;
+  return scopes.map((s) => {
+    const id = s.replace(/^hds\/stream\//, '').replace(/\.[a-z]+$/, '');
+    const root = roots.find((r) => r.id === id);
+    return root ? rootName(root) : id;
+  });
+}
+
 /**
  * Step-up (plan 118 D-J3): the `hds/stream/<root>.contribute` scopes a JSON-RPC write call needs and the token
  * lacks. Empty when the call is not a write, when the token covers every target (on the root or any model ancestor),

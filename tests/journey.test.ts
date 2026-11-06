@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isWriteCall, missingWriteScopes } from '../src/http/stepUp.ts';
+import { extendWriteHint, isWriteCall, missingWriteScopes, rootNames, writeAccess } from '../src/http/stepUp.ts';
 import { reportMissingItemHandler } from '../src/tools/reportMissingItem.ts';
 import type { DataModelPack } from '../src/dataModel/pack.ts';
 
@@ -43,6 +43,15 @@ test('step-up: reads, other methods and prototype names are not writes', () => {
   assert.equal(isWriteCall(call('toString', {})), false);
   assert.equal(isWriteCall(call('create_event', {})), true);
   assert.deepEqual(missingWriteScopes(call('create_event', {}), [], pack), []);
+});
+
+test('write access: roots by name, write vs read only, and the reconnect hint', () => {
+  const named = { items: {}, streams: [{ id: 'body', name: { en: 'Body' } }, { id: 'profile', name: 'Profile' }, { id: 'family' }] } as unknown as DataModelPack;
+  assert.deepEqual(writeAccess(['offline_access', 'hds/stream/body.contribute', 'hds/stream/profile.read', 'hds/stream/family.manage'], named),
+    { write: ['Body', 'family'], readOnly: ['Profile'] });
+  assert.deepEqual(rootNames(['hds/stream/body.contribute', 'hds/stream/unknown.contribute'], named), ['Body', 'unknown']);
+  assert.match(extendWriteHint(['Body']), /add data to "Body".*reconnects the HDS connector.*"Add and modify Body" ticked/);
+  assert.match(extendWriteHint([]), /^To add data, the person reconnects/);
 });
 
 test('report_missing_item: a prefilled data-model-gap issue link with the kind, unit and codes only', async () => {

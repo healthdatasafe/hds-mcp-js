@@ -10,7 +10,7 @@ import type { ResourceTokenVerifier } from './exchange.ts';
 import { observabilityTiming, type HttpObservability } from './observability.ts';
 import { adapterBasePath } from './paths.ts';
 import { addressedAccount, perUserTemplate } from './perUser.ts';
-import { isWriteCall, missingWriteScopes } from './stepUp.ts';
+import { extendWriteHint, isWriteCall, missingWriteScopes, rootNames } from './stepUp.ts';
 import { loadPack } from '../dataModel/pack.ts';
 import type { Platform } from '../lib/hostPolicy.ts';
 
@@ -151,17 +151,24 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
     }
     // Step-up (MCP authorization, scope challenge): a write needs write consent on its data root; the client
     // re-runs consent for the scopes named here (current ones kept, so reads are not lost).
-    const missing = isWriteCall(req.body) ? missingWriteScopes(req.body, req.auth?.scopes ?? [], await loadPack()) : [];
-    if (missing.length > 0) {
+    const pack = isWriteCall(req.body) ? await loadPack() : null;
+    const missing = pack ? missingWriteScopes(req.body, req.auth?.scopes ?? [], pack) : [];
+    if (pack && missing.length > 0) {
       const scope = [...new Set([...(req.auth?.scopes ?? []), ...missing])].join(' ');
+      // The challenge for clients that re-run consent; the JSON-RPC error tells the model what the person does,
+      // for clients that only show "Forbidden".
       res.status(403).set('WWW-Authenticate',
         `Bearer error="insufficient_scope", scope="${scope}", resource_metadata="${getOAuthProtectedResourceMetadataUrl(resourceOf(req))}", ` +
         `error_description="Writing needs your consent to add data to: ${missing.join(', ')}"`)
-        .json({ error: 'insufficient_scope', scope });
+        .json({
+          jsonrpc: '2.0',
+          id: req.body?.id ?? null,
+          error: { code: -32003, message: `This connection may not add this data yet. ${extendWriteHint(rootNames(missing, pack))}`, data: { error: 'insufficient_scope', scope } }
+        });
       return;
     }
     // Stateless: a new server and transport per request, the user's credentials scoped to it.
-    const server = buildServer({ http: true, platform: cfg.platform });
+    const server = buildServer({ http: true, oauth: true, platform: cfg.platform });
     const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
     res.on('close', () => {
       transport.close().catch(() => {});
@@ -169,7 +176,7 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
     });
     try {
       await server.connect(transport);
-      await runWithCredentials(credentials, () => transport.handleRequest(req, res, req.body));
+      await runWithCredentials({ ...credentials, scopes: req.auth?.scopes ?? [] }, () => transport.handleRequest(req, res, req.body));
     } catch (err) {
       safeLog(`MCP request failed: ${(err as Error).message}`);
       if (!res.headersSent) res.status(500).json({ error: 'internal error' });
