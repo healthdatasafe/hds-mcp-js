@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-11-06
+
+### Added
+- `open_account`: account tasks these tools do not do (change email or password, reset a forgotten password, two-step
+  sign-in, connected apps, consents, export or delete the account) get a link to the HDS account panel of the
+  session's platform (`account.hds.ngo` / `demo-account.datasafe.dev`) at the task's page, with the username from
+  `access-info` prefilled at sign-in (perki 2026-11-06). The server instructions route these requests to it.
+
 ## [0.18.0] - 2026-11-06
 
 ### Changed
