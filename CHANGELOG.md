@@ -2,11 +2,18 @@
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-11-06
+
 ### Changed
 - Per-user addresses follow the core's addressing (open-pryv.io R11, rc.75): the account and base come from the
   `X-Adapter-Name` / `X-Adapter-Base` headers the core sets, no longer from the Host. The manifest adds `baseTemplate`.
 
 ### Added
+- The assistant knows how write consent is widened (perki 2026-11-06: uploading is the first use case; Claude.ai
+  ignores the step-up challenge and only shows "Forbidden"). Over OAuth, `get_connection` lists what the connection
+  may add to and only read, by name; the server instructions say to check it before a write and, when the request
+  needs another kind of data, to tell the person to reconnect and keep "Add and modify <name>" ticked. The 403
+  step-up answer keeps its `WWW-Authenticate` challenge and now carries a JSON-RPC error saying the same.
 - Token exchange sends `subject_token_resource` (open-pryv.io R10, rc.75; older cores ignore it): the address the token
   was presented at, the region address or the per-user one, so the core refuses a token issued for another
   address. Exchange answers are cached by token and resource.
