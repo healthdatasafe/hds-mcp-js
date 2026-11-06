@@ -4,6 +4,7 @@ import { createHttpApp } from './http/app.ts';
 import { exchangeVerifier } from './http/exchange.ts';
 import { introspectionVerifier } from './http/introspection.ts';
 import { rawMode } from './http/raw.ts';
+import { perUserHost } from './http/perUser.ts';
 import { httpMethods, initHttpObservability } from './http/observability.ts';
 import { version } from './server.ts';
 import { platformOf, resolveServiceInfoUrl } from './lib/hostPolicy.ts';
@@ -30,6 +31,10 @@ const tokenExchange = process.env.HDS_MCP_TOKEN_EXCHANGE === 'true';
 if (platformOf(serviceInfoUrl) === 'production' && !tokenExchange) {
   throw new Error('A production MCP needs HDS_MCP_TOKEN_EXCHANGE=true (token passthrough is demo only)');
 }
+// Per-user addresses (plan 118 PER-USER-ADDRESS.md), e.g. "api.datasafe.dev": the core's exchange checks the
+// per-user audience (R10), introspection here only knows the configured one.
+const perUserDomain = process.env.HDS_MCP_PER_USER_DOMAIN?.trim().toLowerCase() || undefined;
+if (perUserDomain && !tokenExchange) throw new Error('HDS_MCP_PER_USER_DOMAIN needs HDS_MCP_TOKEN_EXCHANGE=true');
 const secretEndpoint = tokenExchange ? oauthMetadata.token_endpoint : oauthMetadata.introspection_endpoint;
 if (!secretEndpoint) throw new Error(`${issuer} publishes no ${tokenExchange ? 'token' : 'introspection'} endpoint`);
 // The MCP posts its client secret there: https, on the issuer's own host only.
@@ -47,7 +52,14 @@ const verifierConfig = {
 // Raw mode (plan 118 RAW-MODE.md): sign in by link for clients without the connector OAuth. Off unless set.
 const raw = process.env.HDS_MCP_RAW === 'true'
   // The sidecar route keeps the client's Host (create-sidecar.sh: `proxy_set_header Host $http_host`).
-  ? rawMode({ serviceInfoUrl, allowedHosts: [publicUrl.host, `${publicUrl.hostname}:${publicUrl.port || 443}`] })
+  ? rawMode({
+    serviceInfoUrl,
+    allowedHosts: [publicUrl.host, `${publicUrl.hostname}:${publicUrl.port || 443}`],
+    perUserLabel: (host) => {
+      const h = perUserHost(host, perUserDomain);
+      return h && h !== publicUrl.host ? h.split('.')[0] : null;
+    }
+  })
   : null;
 
 const methods = httpMethods(publicUrl.pathname);
@@ -64,6 +76,7 @@ const app = createHttpApp({
   // Space-separated, e.g. "offline_access hds/stream/body.read". Claude Code sends no scope and asks for these.
   scopesSupported: (process.env.HDS_MCP_SCOPES ?? '').split(/\s+/).filter(Boolean),
   raw,
+  perUserDomain,
   platform: platformOf(serviceInfoUrl),
   verifier: tokenExchange
     ? exchangeVerifier({ ...verifierConfig, tokenEndpoint: secretEndpoint })
@@ -74,7 +87,7 @@ const app = createHttpApp({
       requireAudience: process.env.HDS_MCP_REQUIRE_AUDIENCE !== 'false'
     })
 });
-const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}, ${tokenExchange ? 'token exchange' : 'introspection'}${raw ? ', raw mode on' : ''}`));
+const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}, ${tokenExchange ? 'token exchange' : 'introspection'}${raw ? ', raw mode on' : ''}${perUserDomain ? `, per-user on *.${perUserDomain}` : ''}`));
 
 // Flush the last telemetry window on a Dokku stop / redeploy; raw mode deletes the accesses it holds.
 process.once('SIGTERM', () => {

@@ -61,10 +61,17 @@ test('raw: the poll URL may sit on the person\'s core (production), never off th
   assert.equal(pollOnPlatform('not a url', demo), false);
 });
 
-async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean, master?: boolean, extra?: Array<{ streamId: string, level: string }> } = {}) {
+async function start (opts: { name?: string, expires?: number | null, deleteStatus?: number, inline?: boolean, master?: boolean, extra?: Array<{ streamId: string, level: string }>, perUser?: string } = {}) {
   const p = platform(opts);
   const allowedHosts: string[] = [];
-  const raw = rawMode({ serviceInfoUrl: 'https://reg.fake.test/service/info', allowedHosts, fetchFn: p.fetchFn, ...(opts.master ? {} : { permissions: async () => PERMS }) });
+  const raw = rawMode({
+    serviceInfoUrl: 'https://reg.fake.test/service/info',
+    allowedHosts,
+    fetchFn: p.fetchFn,
+    ...(opts.master ? {} : { permissions: async () => PERMS }),
+    // The test server's own host stands for this username.
+    ...(opts.perUser ? { perUserLabel: (h: string) => (allowedHosts.includes(h) ? opts.perUser! : null) } : {})
+  });
   const app = createHttpApp({
     publicUrl: new URL('http://127.0.0.1/adapter/mcp/mcp'),
     oauthMetadata: { issuer: 'https://issuer.test', authorization_endpoint: 'https://issuer.test/a', token_endpoint: 'https://issuer.test/t', response_types_supported: ['code'] },
@@ -95,6 +102,23 @@ async function start (opts: { name?: string, expires?: number | null, deleteStat
   await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 't', version: '0' } });
   return { p, raw, server, url, rpc, tool, sid: () => sid };
 }
+
+test('raw: a per-user address accepts its own account only; another account\'s access is deleted', async () => {
+  const mine = await start({ perUser: 'alice' });
+  try {
+    await mine.tool('connect');
+    mine.p.state.poll = 'ACCEPTED';
+    assert.match(await mine.tool('connect_status'), /Connected as alice/);
+  } finally { mine.server.close(); }
+  const other = await start({ perUser: 'bob' });
+  try {
+    await other.tool('connect');
+    other.p.state.poll = 'ACCEPTED';
+    assert.match(await other.tool('connect_status'), /this address is for the account bob/);
+    assert.deepEqual(other.p.state.deleted, ['acc1']);
+    assert.match(await other.tool('get_events'), /Not connected/);
+  } finally { other.server.close(); }
+});
 
 test('raw: sign in by link, verified access, tools run as the person, disconnect deletes the access', async () => {
   const t = await start();

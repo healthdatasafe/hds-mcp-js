@@ -33,6 +33,11 @@ export interface RawConfig {
   /** Fixed platform (never from a tool argument). */
   serviceInfoUrl: string;
   allowedHosts: string[];
+  /**
+   * Per-user addresses (perUser.ts): the username a host stands for, or null. A session started on such a host is
+   * pinned to it and accepts only that account's sign-in.
+   */
+  perUserLabel?: (host: string) => string | null;
   fetchFn?: typeof fetch;
   /** For tests; deployments ask for the master access `*` at manage. */
   permissions?: () => Promise<RequestedPermission[]>;
@@ -53,6 +58,8 @@ interface Session {
   outcome?: string;
   /** The poll in flight: concurrent requests share it (the credential hand-off is one-time). */
   polling?: Promise<string>;
+  /** Started on a per-user address: the only account this session accepts. */
+  userLabel?: string;
 }
 
 // Before connect: tools that need the account refuse (session.ts throws on an empty endpoint).
@@ -139,6 +146,11 @@ export function rawMode (cfg: RawConfig) {
     try {
       if (platformOf(api.href) !== platformOf(cfg.serviceInfoUrl)) {
         throw new Error(`this MCP serves the HDS ${platformOf(cfg.serviceInfoUrl)} platform; the access is on another platform`);
+      }
+      // A per-user address serves its own account only.
+      const username = info.user?.username ?? body.username;
+      if (s.userLabel && username !== s.userLabel) {
+        throw new Error(`this address is for the account ${s.userLabel}; sign in as that account or use its own address`);
       }
       const asked = new Map(pending.permissions.map((p) => [p.streamId, p.level]));
       // Feature permissions (e.g. selfRevoke) carry no streamId.
@@ -297,15 +309,18 @@ export function rawMode (cfg: RawConfig) {
     };
   }
 
-  function newSession (): Session {
+  function newSession (host?: string): Session {
     const s = {} as Session;
+    const label = host ? cfg.perUserLabel?.(host) ?? null : null;
+    if (label) s.userLabel = label;
+    const allowedHosts = label && host ? [host.toLowerCase()] : cfg.allowedHosts;
     s.created = s.lastSeen = Date.now();
     s.server = buildServer({ http: true, extraTools: rawTools(() => s), platform: platformOf(cfg.serviceInfoUrl) });
     s.transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomBytes(32).toString('base64url'),
       enableJsonResponse: true,
       enableDnsRebindingProtection: true,
-      allowedHosts: cfg.allowedHosts,
+      allowedHosts,
       onsessioninitialized: (id) => { sessions.set(id, s); }
     });
     s.transport.onclose = () => {
@@ -342,7 +357,7 @@ export function rawMode (cfg: RawConfig) {
         }
         await drop(idle[0], idle[1]);
       }
-      s = newSession();
+      s = newSession(req.headers.host);
       await s.server.connect(s.transport);
     }
     s.lastSeen = Date.now();

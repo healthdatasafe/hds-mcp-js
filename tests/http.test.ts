@@ -7,6 +7,7 @@ import { InvalidTokenError, ServerError } from '@modelcontextprotocol/sdk/server
 import { createHttpApp } from '../src/http/app.ts';
 import { exchangeVerifier } from '../src/http/exchange.ts';
 import { introspectionVerifier } from '../src/http/introspection.ts';
+import { perUserHost } from '../src/http/perUser.ts';
 import { httpMethods, initHttpObservability } from '../src/http/observability.ts';
 
 // A fake core API: answers batch calls with the token it received, so each user can see whose token was used.
@@ -155,6 +156,75 @@ test('sidecar under /adapter/mcp/: manifest, status and the MCP under the base, 
     const res = await fetch(`${base}/adapter/mcp/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     assert.equal(res.status, 401);
     assert.match(res.headers.get('www-authenticate') ?? '', /oauth-protected-resource\/adapter\/mcp\/mcp/);
+  } finally { s.close(); }
+});
+
+test('perUserHost: one label under the domain, no port, nothing else', () => {
+  assert.equal(perUserHost('alice.api.datasafe.dev', 'api.datasafe.dev'), 'alice.api.datasafe.dev');
+  assert.equal(perUserHost('Alice-2.API.datasafe.dev', 'api.datasafe.dev'), 'alice-2.api.datasafe.dev');
+  assert.equal(perUserHost('api.datasafe.dev', 'api.datasafe.dev'), null);
+  assert.equal(perUserHost('a.b.api.datasafe.dev', 'api.datasafe.dev'), null);
+  assert.equal(perUserHost('alice.api.datasafe.dev:8443', 'api.datasafe.dev'), null);
+  assert.equal(perUserHost('alice.api.datasafe.dev.evil.test', 'api.datasafe.dev'), null);
+  assert.equal(perUserHost('-x.api.datasafe.dev', 'api.datasafe.dev'), null);
+  assert.equal(perUserHost('alice.api.datasafe.dev', undefined), null);
+  assert.equal(perUserHost(undefined, 'api.datasafe.dev'), null);
+});
+
+// GET / POST with a chosen Host header (fetch may not send one).
+function hostRequest (base: string, path: string, host: string, method = 'GET', body?: string) {
+  return new Promise<{ status: number, headers: http.IncomingHttpHeaders, body: string }>((resolve, reject) => {
+    const u = new URL(base);
+    const r = http.request({ hostname: u.hostname, port: u.port, path, method, headers: { host, 'content-type': 'application/json', ...(body ? { 'content-length': Buffer.byteLength(body) } : {}) } }, (res) => {
+      let data = '';
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, headers: res.headers, body: data }));
+    });
+    r.on('error', reject);
+    r.end(body);
+  });
+}
+
+test('per-user addresses: metadata and challenges name the host the request came in on, the region address is unchanged', async () => {
+  const app = createHttpApp({
+    publicUrl: new URL('https://auth-ch.api.datasafe.dev/adapter/mcp/mcp'),
+    oauthMetadata: { issuer: 'https://auth-ch.api.datasafe.dev', authorization_endpoint: 'https://auth-ch.api.datasafe.dev/a', token_endpoint: 'https://auth-ch.api.datasafe.dev/t', response_types_supported: ['code'] },
+    allowedOrigins: [],
+    scopesSupported: ['offline_access'],
+    perUserDomain: 'api.datasafe.dev',
+    raw: { mount () {} },
+    verifier: { async verifyAccessToken () { throw new InvalidTokenError('Token is not active'); } }
+  });
+  const s = http.createServer(app);
+  const base = await listen(s);
+  const prm = '/.well-known/oauth-protected-resource/adapter/mcp/mcp';
+  try {
+    const mine = await hostRequest(base, prm, 'alice.api.datasafe.dev');
+    assert.equal(mine.status, 200);
+    assert.deepEqual(JSON.parse(mine.body), {
+      resource: 'https://alice.api.datasafe.dev/adapter/mcp/mcp',
+      authorization_servers: ['https://auth-ch.api.datasafe.dev'],
+      scopes_supported: ['offline_access'],
+      resource_name: 'Health Data Safe'
+    });
+    assert.match(String(mine.headers.vary), /host/i);
+    // The region host is one label under the domain too: it keeps the SDK's metadata.
+    const region = await hostRequest(base, prm, 'auth-ch.api.datasafe.dev');
+    assert.equal(JSON.parse(region.body).resource, 'https://auth-ch.api.datasafe.dev/adapter/mcp/mcp');
+    assert.equal(JSON.parse(region.body).resource_name, 'Health Data Safe');
+    const other = await hostRequest(base, prm, 'evil.test');
+    assert.equal(JSON.parse(other.body).resource, 'https://auth-ch.api.datasafe.dev/adapter/mcp/mcp');
+
+    const denied = await hostRequest(base, '/adapter/mcp/mcp', 'alice.api.datasafe.dev', 'POST', '{}');
+    assert.equal(denied.status, 401);
+    assert.match(String(denied.headers['www-authenticate']), /resource_metadata="https:\/\/alice\.api\.datasafe\.dev\/\.well-known\/oauth-protected-resource\/adapter\/mcp\/mcp"/);
+    const deniedRegion = await hostRequest(base, '/adapter/mcp/mcp', 'auth-ch.api.datasafe.dev', 'POST', '{}');
+    assert.match(String(deniedRegion.headers['www-authenticate']), /resource_metadata="https:\/\/auth-ch\.api\.datasafe\.dev\//);
+
+    const m = JSON.parse((await hostRequest(base, '/adapter/mcp/manifest.json', 'alice.api.datasafe.dev')).body);
+    assert.equal(m.mcpEndpoint, 'https://auth-ch.api.datasafe.dev/adapter/mcp/mcp');
+    assert.equal(m.mcpEndpointTemplate, 'https://{username}.api.datasafe.dev/adapter/mcp/mcp');
+    assert.equal(m.rawEndpointTemplate, 'https://{username}.api.datasafe.dev/adapter/mcp/raw');
   } finally { s.close(); }
 });
 

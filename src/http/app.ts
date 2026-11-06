@@ -9,6 +9,7 @@ import { runWithCredentials, type RequestCredentials } from '../auth/session.ts'
 import { safeLog } from '../lib/scrubber.ts';
 import { observabilityTiming, type HttpObservability } from './observability.ts';
 import { adapterBasePath } from './paths.ts';
+import { perUserHost, perUserTemplate } from './perUser.ts';
 import { isWriteCall, missingWriteScopes } from './stepUp.ts';
 import { loadPack } from '../dataModel/pack.ts';
 import type { Platform } from '../lib/hostPolicy.ts';
@@ -28,13 +29,16 @@ export interface HttpAppConfig {
   platform?: Platform;
   /** Raw mode (sign in by link, no OAuth), mounted at `<base>raw`; omitted or null when disabled. */
   raw?: { mount (app: express.Express, path: string): void } | null;
+  /** Per-user addresses on `<username>.<perUserDomain>` (perUser.ts); omitted when off. */
+  perUserDomain?: string;
 }
 
 /**
  * Pryv adapter manifest (adapter contract §3): the core lists this server's base URL in /service/info `adapters`,
  * and clients (e.g. the account app's "use HDS with your AI assistant" page) read the details here.
  */
-export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMetadata' | 'connectorClients' | 'raw' | 'platform'>) {
+export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMetadata' | 'connectorClients' | 'raw' | 'platform' | 'perUserDomain'>) {
+  const base = adapterBasePath(cfg.publicUrl.pathname);
   return {
     name: packageName,
     type: 'mcp',
@@ -50,7 +54,14 @@ export function adapterManifest (cfg: Pick<HttpAppConfig, 'publicUrl' | 'oauthMe
     clients: cfg.connectorClients ?? {},
     ...(cfg.platform ? { platform: cfg.platform } : {}),
     // Raw mode: sign in by link, no client ID (only when enabled).
-    ...(cfg.raw ? { rawEndpoint: new URL(`${adapterBasePath(cfg.publicUrl.pathname)}raw`, cfg.publicUrl).href } : {})
+    ...(cfg.raw ? { rawEndpoint: new URL(`${base}raw`, cfg.publicUrl).href } : {}),
+    // Per-user addresses: the account app fills {username} (the region addresses above keep working).
+    ...(cfg.perUserDomain
+      ? {
+          mcpEndpointTemplate: perUserTemplate(cfg.perUserDomain, cfg.publicUrl.pathname),
+          ...(cfg.raw ? { rawEndpointTemplate: perUserTemplate(cfg.perUserDomain, `${base}raw`) } : {})
+        }
+      : {})
   };
 }
 
@@ -84,16 +95,46 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
   });
   app.use(originCheck(cfg.allowedOrigins));
   cfg.raw?.mount(app, `${base}raw`);
+  const scopesSupported = cfg.scopesSupported?.length ? cfg.scopesSupported : undefined;
+  // The resource is the per-user host the request came in on, else the configured address (whose host is one label
+  // under the domain too, e.g. auth-ch, and stays the region address).
+  const perUserOf = (req: Request): string | null => {
+    const host = perUserHost(req.headers.host, cfg.perUserDomain);
+    return host && host !== cfg.publicUrl.host ? host : null;
+  };
+  const resourceOf = (req: Request): URL => {
+    const host = perUserOf(req);
+    return host ? new URL(`https://${host}${path}`) : cfg.publicUrl;
+  };
+  if (cfg.perUserDomain) {
+    // RFC 9728 metadata naming the per-user resource (same members as the SDK router below).
+    app.get(`/.well-known/oauth-protected-resource${path}`, (req: Request, res: Response, next: NextFunction) => {
+      res.vary('Host');
+      if (!perUserOf(req)) { next(); return; }
+      const resource = resourceOf(req);
+      res.set('Access-Control-Allow-Origin', '*').json({
+        resource: resource.href,
+        authorization_servers: [cfg.oauthMetadata.issuer],
+        ...(scopesSupported ? { scopes_supported: scopesSupported } : {}),
+        resource_name: 'Health Data Safe'
+      });
+    });
+  }
   app.use(mcpAuthMetadataRouter({
     oauthMetadata: cfg.oauthMetadata,
     resourceServerUrl: cfg.publicUrl,
     resourceName: 'Health Data Safe',
-    scopesSupported: cfg.scopesSupported?.length ? cfg.scopesSupported : undefined
+    scopesSupported
   }));
-  const auth = requireBearerAuth({
+  const defaultAuth = requireBearerAuth({
     verifier: cfg.verifier,
     resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(cfg.publicUrl)
   });
+  const auth = (req: Request, res: Response, next: NextFunction) => {
+    if (!perUserOf(req)) return defaultAuth(req, res, next);
+    res.vary('Host');
+    return requireBearerAuth({ verifier: cfg.verifier, resourceMetadataUrl: getOAuthProtectedResourceMetadataUrl(resourceOf(req)) })(req, res, next);
+  };
 
   app.post(path, express.json({ limit: '4mb' }), auth, async (req: Request, res: Response) => {
     const credentials = req.auth?.extra?.credentials as RequestCredentials | undefined;
@@ -112,7 +153,7 @@ export function createHttpApp (cfg: HttpAppConfig): express.Express {
     if (missing.length > 0) {
       const scope = [...new Set([...(req.auth?.scopes ?? []), ...missing])].join(' ');
       res.status(403).set('WWW-Authenticate',
-        `Bearer error="insufficient_scope", scope="${scope}", resource_metadata="${getOAuthProtectedResourceMetadataUrl(cfg.publicUrl)}", ` +
+        `Bearer error="insufficient_scope", scope="${scope}", resource_metadata="${getOAuthProtectedResourceMetadataUrl(resourceOf(req))}", ` +
         `error_description="Writing needs your consent to add data to: ${missing.join(', ')}"`)
         .json({ error: 'insufficient_scope', scope });
       return;
