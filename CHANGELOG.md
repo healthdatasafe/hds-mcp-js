@@ -2,11 +2,18 @@
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-11-06
+
 ### Added
 - Per-user addresses (off unless `HDS_MCP_PER_USER_DOMAIN` is set, e.g. `api.datasafe.dev`; needs token exchange):
   on `https://<username>.<domain>/adapter/mcp/mcp` the RFC 9728 metadata, the 401 / 403 challenges and raw-mode
   sessions name that host, and the manifest gives `mcpEndpointTemplate` / `rawEndpointTemplate`. Waits for the core's
   per-user audience (open-pryv.io R10) before it is switched on.
+
+### Changed
+- `get_import_guide` letter topic follows data-model 3.46.0: an uncoded prescription goes to
+  `medication-prescription-basic`; regimens carry `timeOfDay` or `when` and `bounds`; `stopReason` / prescription
+  `status: stopped`; no `status: skipped` on intakes until the readers ship.
 
 ## [0.16.1] - 2026-11-05
 
