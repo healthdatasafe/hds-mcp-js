@@ -37,7 +37,7 @@ MCP + vision). See [Roadmap](#roadmap).
 
 1. A computer (macOS or Windows).
 2. **Claude Desktop** installed → <https://claude.ai/download>.
-3. **Node.js 20 or newer** → <https://nodejs.org> (any LTS works; pick the green button).
+3. **Node.js 22 or newer** → <https://nodejs.org> (any LTS works; pick the green button).
 4. A browser (any modern one) for the sign-in step.
 
 > **For the bigger "process a folder of documents" scenario** you will also
@@ -105,7 +105,7 @@ That's it. The connection lasts until you quit Claude Desktop.
 
 ## What the tools do
 
-The MCP exposes fifteen tools to your agent. **You don't call them directly —**
+The MCP exposes nineteen tools to your agent. **You don't call them directly —**
 you just ask your agent in plain language. The agent picks the right tool.
 
 | Tool | What it does | Plain-language prompt |
@@ -124,6 +124,10 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `ensure_streams` | Create the data containers an item needs before writing | *(the agent does this itself before an import)* |
 | `update_event` | Fix one event in place | *"That weight should be 71.9, not 71.5."* |
 | `delete_events` | Remove events, or everything one import wrote; shows the list first | *"Remove everything the health-files import wrote."* |
+| `get_connection` | Say which platform (demo or production) the session uses and whether it is connected | *"Am I on my real account?"* |
+| `get_import_guide` | The steps and rules for importing medical history (documents, lab reports, app exports) | *"Import my lab reports."* |
+| `report_missing_item` | Prepare a GitHub issue asking HDS to add a missing item; you post it yourself | *"HDS has nothing for this test, tell them."* |
+| `report_problem` | Prepare a GitHub issue about a connector failure; you post it yourself | *"This keeps failing, report it."* |
 | `open_account` | Link to the HDS account panel for account tasks, your username filled in | *"I want to change my email."* |
 
 ---
@@ -161,6 +165,11 @@ next session starts back in the safe state.
   quits.
 - The MCP scrubs your token from any log line or error message before
   writing it. There's a unit test that pins this.
+- `report_problem` prepares a link to a **public** GitHub issue. Before
+  building it, the MCP removes tokens, emails, your account name and
+  per-user addresses, link parameters and long ids from what the agent
+  wrote. Read the report before you post it: a name or a value written in
+  plain words is not caught.
 
 ---
 

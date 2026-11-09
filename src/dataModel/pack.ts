@@ -1,4 +1,5 @@
 import { safeLog } from '../lib/scrubber.ts';
+import { policyFetch, TIMEOUT_MS, UpstreamError } from '../lib/fetchPolicy.ts';
 
 const DEFAULT_PACK_URL = 'https://model.datasafe.dev/pack.json';
 
@@ -37,8 +38,8 @@ export async function loadPack (url?: string): Promise<DataModelPack> {
   const packUrl = url ?? DEFAULT_PACK_URL;
   loadingPromise = (async () => {
     safeLog(`Loading HDS data-model pack from ${packUrl}`);
-    const res = await fetch(packUrl);
-    if (!res.ok) throw new Error(`Failed to load data-model pack: HTTP ${res.status}`);
+    const res = await policyFetch(packUrl, {}, TIMEOUT_MS.pack);
+    if (!res.ok) throw new UpstreamError(`Failed to load data-model pack: HTTP ${res.status}`, res.status);
     const pack = await res.json() as DataModelPack;
     if (!pack.items || typeof pack.items !== 'object') {
       throw new Error('Pack did not contain an `items` object');
@@ -47,6 +48,8 @@ export async function loadPack (url?: string): Promise<DataModelPack> {
     safeLog(`Pack loaded: data-model ${pack.version ?? '(version unknown)'}, ${Object.keys(pack.items).length} items`);
     return pack;
   })();
+  // A failed load (timeout, outage) is retried by the next call, not kept for the life of the process.
+  loadingPromise.catch(() => { loadingPromise = null; });
   return loadingPromise;
 }
 

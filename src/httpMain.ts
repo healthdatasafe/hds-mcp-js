@@ -6,8 +6,8 @@ import { introspectionVerifier } from './http/introspection.ts';
 import { rawMode } from './http/raw.ts';
 import { addressedAccount } from './http/perUser.ts';
 import { adapterBasePath } from './http/paths.ts';
-import { httpMethods, initHttpObservability } from './http/observability.ts';
-import { version } from './server.ts';
+import { httpMethods, initHttpObservability, toolMethods, toolObserver } from './http/observability.ts';
+import { setToolObserver, TOOL_NAMES, version } from './server.ts';
 import { platformOf, resolveServiceInfoUrl } from './lib/hostPolicy.ts';
 import { safeLog } from './lib/scrubber.ts';
 
@@ -62,7 +62,8 @@ const raw = process.env.HDS_MCP_RAW === 'true'
   : null;
 
 const methods = httpMethods(publicUrl.pathname);
-const obs = await initHttpObservability(process.env, String(version), methods);
+const obs = await initHttpObservability(process.env, String(version), [...methods, ...toolMethods(TOOL_NAMES)]);
+if (obs) setToolObserver(toolObserver(obs));
 
 const app = createHttpApp({
   publicUrl,

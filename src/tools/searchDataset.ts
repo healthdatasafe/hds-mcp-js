@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { loadPack } from '../dataModel/pack.ts';
 import { packLabel } from '../dataModel/eventTypes.ts';
 import { datasourceDef, resolveEndpoint } from '../dataModel/datasources.ts';
+import { policyFetch, UpstreamError } from '../lib/fetchPolicy.ts';
 
 export const searchDatasetInput = {
   datasource: z.string().min(1).describe(
@@ -28,10 +29,10 @@ export async function searchDatasetHandler (
   }
   const url = new URL(await resolveEndpoint(ds.endpoint));
   url.searchParams.set(ds.queryParam, query.trim());
-  const res = await fetch(url);
+  const res = await policyFetch(url);
   const body = await res.json().catch(() => ({})) as Record<string, any>;
   if (!res.ok) {
-    throw new Error(`Dataset search failed: ${body?.error?.message ?? body?.message ?? `HTTP ${res.status}`}`);
+    throw new UpstreamError(`Dataset search failed: ${body?.error?.message ?? body?.message ?? `HTTP ${res.status}`}`, res.status);
   }
   const all: any[] = Array.isArray(body[ds.resultKey]) ? body[ds.resultKey] : [];
   const fields = ds.valueFields ?? ['label', 'description', 'codes', 'hdsId'];

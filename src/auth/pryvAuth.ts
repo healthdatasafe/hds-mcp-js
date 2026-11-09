@@ -1,5 +1,6 @@
 import open from 'open';
 import { safeLog } from '../lib/scrubber.ts';
+import { policyFetch, UpstreamError } from '../lib/fetchPolicy.ts';
 
 export const APP_ID = 'hds-mcp';
 const POLL_INTERVAL_MS_DEFAULT = 1000;
@@ -32,8 +33,8 @@ export interface RequestedPermission {
 }
 
 export async function fetchServiceInfo (serviceInfoUrl: string): Promise<ServiceInfo> {
-  const res = await fetch(serviceInfoUrl);
-  if (!res.ok) throw new Error(`service-info fetch failed: HTTP ${res.status}`);
+  const res = await policyFetch(serviceInfoUrl);
+  if (!res.ok) throw new UpstreamError(`service-info fetch failed: HTTP ${res.status}`, res.status);
   const info = await res.json() as ServiceInfo;
   if (info.access == null) throw new Error('service-info missing `access` URL');
   return info;
@@ -49,7 +50,7 @@ export async function runAuthFlow (
   // POST the bare `info.access` URL — the appId is carried in the body as
   // `requestingAppId`. POSTing to `info.access + APP_ID` hits the sign-in
   // page's result-reporting endpoint and returns HTTP 400.
-  const initRes = await fetch(info.access, {
+  const initRes = await policyFetch(info.access, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -60,7 +61,7 @@ export async function runAuthFlow (
     })
   });
   if (!initRes.ok) {
-    throw new Error(`auth request failed: HTTP ${initRes.status} ${await safeText(initRes)}`);
+    throw new UpstreamError(`auth request failed: HTTP ${initRes.status} ${await safeText(initRes)}`, initRes.status);
   }
   const init = await initRes.json() as AuthRequestResponse;
   if (init.status !== 'NEED_SIGNIN' || !init.poll || !(init.authUrl ?? init.url)) {
@@ -77,7 +78,13 @@ export async function runAuthFlow (
 
   while (Date.now() < deadline) {
     await sleep(intervalMs);
-    const pollRes = await fetch(pollUrl);
+    let pollRes: Response;
+    try {
+      pollRes = await policyFetch(pollUrl);
+    } catch (err) {
+      safeLog(`poll failed (${(err as Error).message}), continuing`);
+      continue;
+    }
     if (!pollRes.ok) {
       safeLog(`poll non-OK (${pollRes.status}), continuing`);
       continue;

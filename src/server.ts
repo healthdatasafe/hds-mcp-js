@@ -23,11 +23,28 @@ import { extendWriteHint } from './http/stepUp.ts';
 import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
 
-function wrap<T> (handler: (a: T) => Promise<any>) {
+/** Every tool buildServer can register: the closed set of `tool <name>` telemetry ids. */
+export const TOOL_NAMES = [
+  'connect', 'list_streams', 'get_events', 'create_event', 'import_batch', 'ensure_streams', 'update_event',
+  'delete_events', 'search_items', 'get_item', 'get_event_type', 'list_model_streams', 'list_datasources',
+  'search_dataset', 'get_connection', 'get_import_guide', 'report_missing_item', 'report_problem', 'open_account'
+] as const;
+type ToolName = (typeof TOOL_NAMES)[number];
+
+type ToolObserver = (tool: ToolName, err: unknown | null, durationMs: number) => void;
+let toolObserver: ToolObserver | null = null;
+/** HTTP telemetry: called once per tool call, err null on success. A tool error is a 200 + isError, invisible per route. */
+export function setToolObserver (fn: ToolObserver | null): void { toolObserver = fn; }
+
+function wrap<T> (name: ToolName, handler: (a: T) => Promise<any>) {
   return async (args: T) => {
+    const start = performance.now();
     try {
-      return await handler(args);
+      const result = await handler(args);
+      toolObserver?.(name, null, performance.now() - start);
+      return result;
     } catch (err) {
+      toolObserver?.(name, err, performance.now() - start);
       const safe = scrubError(err);
       return {
         isError: true,
@@ -75,7 +92,7 @@ export function buildServer (
       'connect',
       'Connect to an HDS / Pryv account via OAuth. Opens your browser to sign in. Demo by default. For an import, pass roots (only the root streams it writes, from list_model_streams) and importName (its own app access, so every event names the import and it can be removed later); tell the user which kinds of data and which level the access covers before signing in. ' + PRIVACY_DISCLOSURE,
       connectInput,
-      wrap(connectHandler)
+      wrap('connect', connectHandler)
     );
   }
 
@@ -83,28 +100,28 @@ export function buildServer (
     'list_streams',
     'List the streams (data containers) in the connected HDS account. Returns the stream tree.',
     listStreamsInput,
-    wrap(listStreamsHandler)
+    wrap('list_streams', listStreamsHandler)
   );
 
   server.tool(
     'get_events',
     'Get events (data points) from the connected HDS account, optionally filtered by stream, type, time range, clientData.sourceKey prefix (everything one import wrote) or the event they cite (relatedTo). state: \'all\' includes trashed events, which a re-run must see and leave trashed. Pages with limit + skip.',
     getEventsInput,
-    wrap(getEventsHandler)
+    wrap('get_events', getEventsHandler)
   );
 
   server.tool(
     'create_event',
     'Create a single event (data point) in the connected HDS account. Always call search_items first to find the canonical HDS item for the data type, then get_item to read its spec, and use that streamId + eventType. If no item matches, ask the user before inventing a type. The content is checked against the eventType content schema before writing; an unknown type or invalid content is refused and nothing is written. Optional description (human text every app shows) and clientData (data-model conventions such as sourceKey). Refuses on production until the production-write gate is opened.',
     createEventInput,
-    wrap(createEventHandler)
+    wrap('create_event', createEventHandler)
   );
 
   server.tool(
     'import_batch',
     'Import many events at once (1–500 per call). Always call search_items first to find the canonical HDS item for each data type, then get_item for its spec, and use those streamId + eventType values. If no item matches for some data, ask the user before inventing a type. Every event is checked against its eventType content schema first; if any fails, the whole batch is refused and nothing is written. Returns the created event ids in input order, so later events can reference earlier ones. Refuses on production until the production-write gate is opened.',
     importBatchInput,
-    wrap(importBatchHandler)
+    wrap('import_batch', importBatchHandler)
   );
 
   // Not over OAuth: its grants never carry manage, so stream creation is always refused there. Raw mode holds manage.
@@ -113,7 +130,7 @@ export function buildServer (
       'ensure_streams',
       'Create the streams the given HDS items need in the connected account, with their data-model names, parents first (call before writing to items whose streams may not exist yet). Needs manage on the root. Refuses on production until the production-write gate is opened.',
       ensureStreamsInput,
-      wrap(ensureStreamsHandler)
+      wrap('ensure_streams', ensureStreamsHandler)
     );
   }
 
@@ -121,91 +138,91 @@ export function buildServer (
     'update_event',
     'Change one event in place (content, time, description, clientData, …), e.g. when an import runs again and a record changed: find it by clientData.sourceKey with get_events. Content is checked against the event type first. clientData is replaced whole: keep sourceKey. Never update a trashed event: the user removed it. Refuses on production until the production-write gate is opened.',
     updateEventInput,
-    wrap(updateEventHandler)
+    wrap('update_event', updateEventHandler)
   );
 
   server.tool(
     'delete_events',
     'Delete events by id, or everything one import wrote by clientData.sourceKey prefix. Without confirm: true it is a dry run that lists what would go: show the list to the user and only confirm after they agree. Deletes citing events before their sources. A first delete moves events to the trash; deleting trashed events removes them for good. Refuses on production until the production-write gate is opened.',
     deleteEventsInput,
-    wrap(deleteEventsHandler)
+    wrap('delete_events', deleteEventsHandler)
   );
 
   server.tool(
     'search_items',
     'Search the HDS data-model for items (the canonical, human-meaningful unit: a streamId + eventType + content shape). Use this BEFORE create_event or import_batch to find the right item. Searches labels in every language the model has (English, French), and terminology codes: a LOINC, SNOMED-CT, ICD-10 or ICF code finds the item that owns it (use the item, not a generic lab result, when one does). Deprecated items are hidden unless asked for. If a search returns no match for the user\'s data, surface that to the user — do not fall back to inventing types — and offer report_missing_item.',
     searchItemsInput,
-    wrap(searchItemsHandler)
+    wrap('search_items', searchItemsHandler)
   );
 
   server.tool(
     'get_item',
     'Get the full definition of a single HDS item by key (e.g. "body-weight"). Call this after search_items to read the spec before writing events. Returns the canonical streamId, eventType (or the unit choices), scale/unit/options if any, the content schema of each eventType, and the data-model version.',
     getItemInput,
-    wrap(getItemHandler)
+    wrap('get_item', getItemHandler)
   );
 
   server.tool(
     'get_event_type',
     'Get one HDS event type: its content schema (what create_event / import_batch accept), the unit name for measurement types, whether it needs an attachment, and the items that use it. Reads the data model only; no account needed.',
     getEventTypeInput,
-    wrap(getEventTypeHandler)
+    wrap('get_event_type', getEventTypeHandler)
   );
 
   server.tool(
     'list_model_streams',
     'Browse the stream tree of the HDS data model: the root streams (the consent units apps ask access to) or the children of one stream, with the items each holds. This is the model, not the user\'s account: use list_streams for the account. No account needed.',
     listModelStreamsInput,
-    wrap(listModelStreamsHandler)
+    wrap('list_model_streams', listModelStreamsHandler)
   );
 
   server.tool(
     'list_datasources',
     'List the HDS datasets (curated, coded lists: conditions, findings, medications, procedures, treatments) and the items that take a value from each. Use search_dataset to look up an entry. No account needed.',
     listDatasourcesInput,
-    wrap(listDatasourcesHandler)
+    wrap('list_datasources', listDatasourcesHandler)
   );
 
   server.tool(
     'search_dataset',
     'Search an HDS dataset (from list_datasources) for a coded entry, e.g. a diagnosis for condition-coded or a drug for medication-intake-coded, and get its label, codes (SNOMED-CT, ATC, RxNorm, …) and hdsId to store unchanged in the item\'s content. The search text is sent to the HDS datasets service of the connected platform (demo when not connected); tell the user when the text names their condition or medication. The lists are curated and incomplete: on no match, tell the user, never invent a code.',
     searchDatasetInput,
-    wrap(searchDatasetHandler)
+    wrap('search_dataset', searchDatasetHandler)
   );
 
   server.tool(
     'get_connection',
     'Which HDS platform this session uses (production = the person\'s real health record; demo = a test platform for trying things out with a throwaway account) and whether it is connected. Tell the person before the first read or write.',
     getConnectionInput,
-    wrap(getConnectionHandler)
+    wrap('get_connection', getConnectionHandler)
   );
 
   server.tool(
     'get_import_guide',
     'How to import a person\'s medical history (documents, lab reports, photos, spreadsheets, app exports) into HDS: the steps, the rules for each source type, and what to do when no item fits. Call it with no topic before the first import, then with the topic of each source. No account needed.',
     getImportGuideInput,
-    wrap(getImportGuideHandler)
+    wrap('get_import_guide', getImportGuideHandler)
   );
 
   server.tool(
     'report_missing_item',
     'When no HDS item fits the user\'s data (search_items found nothing suitable), prepare a report asking HDS to add one: returns a prefilled GitHub issue link (site-agents, data-model gap) for the user to open and post themselves; nothing is sent by this tool. Offer it to the user, and put only the kind of data, its unit and known codes in it: never their values, names, dates or file names.',
     reportMissingItemInput,
-    wrap(reportMissingItemHandler)
+    wrap('report_missing_item', reportMissingItemHandler)
   );
 
   server.tool(
     'report_problem',
     'When this connector fails in a way the person cannot fix (a tool error, a refused sign-in, wrong behaviour), prepare a problem report for the HDS team: returns a prefilled GitHub issue link (site-agents, agent problem) for the person to open and post themselves; nothing is sent by this tool. Put only what was asked and the error as-is: never their health data, names, account name or links.',
     reportProblemInput,
-    wrap(reportProblemHandler)
+    wrap('report_problem', reportProblemHandler)
   );
 
   server.tool(
     'open_account',
     'When the person wants to change their email or password, reset a forgotten password, set up two-step sign-in, see or revoke connected apps, change consents, or export or delete their account: returns a link to the HDS account panel of this platform at that page, with their username filled in at sign-in when connected. The person does it there; nothing is changed by this tool.',
     openAccountInput,
-    wrap(openAccountHandler)
+    wrap('open_account', openAccountHandler)
   );
 
   // Raw HTTP mode adds its own connect / connect_status / disconnect.

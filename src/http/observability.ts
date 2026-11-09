@@ -37,7 +37,7 @@ const OBSERVABILITY_MODULE = 'hds-observability-js';
 
 export const ERROR_CODES = [
   'UNAUTHORIZED', 'FORBIDDEN', 'BAD_REQUEST', 'NOT_FOUND',
-  'CONFLICT', 'UPSTREAM_ERROR', 'INTERNAL_ERROR'
+  'CONFLICT', 'RATE_LIMITED', 'UPSTREAM_ERROR', 'INTERNAL_ERROR', 'TOOL_ERROR'
 ] as const;
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -63,15 +63,50 @@ function statusClassOf (code: number): StatusClass {
   return (c >= 2 && c <= 5) ? (`${c}xx` as StatusClass) : 'error';
 }
 
-function errorCodeOf (code: number): ErrorCode {
+/** Same mapping as lib-bridge-js 0.16.1: a rate limit is not an upstream failure, a gateway error not our bug. */
+export function errorCodeOf (code: number): ErrorCode {
   switch (code) {
     case 401: return 'UNAUTHORIZED';
     case 403: return 'FORBIDDEN';
     case 400: return 'BAD_REQUEST';
     case 404: return 'NOT_FOUND';
     case 409: return 'CONFLICT';
-    default: return code >= 500 ? 'INTERNAL_ERROR' : 'UPSTREAM_ERROR';
+    case 429: return 'RATE_LIMITED';
+    case 502: case 503: case 504: return 'UPSTREAM_ERROR';
+    default: return code >= 500 ? 'INTERNAL_ERROR' : 'BAD_REQUEST';
   }
+}
+
+/**
+ * A failed tool call, by kind. The status is the upstream's (core, datasets, pack), so any 5xx there is
+ * UPSTREAM_ERROR; no answer (timeout, network) too. Anything else the tool refused itself is TOOL_ERROR.
+ */
+export function toolErrorCodeOf (err: unknown): ErrorCode {
+  const status = (err as { status?: unknown })?.status;
+  if (typeof status === 'number') return status >= 500 ? 'UPSTREAM_ERROR' : errorCodeOf(status);
+  const name = (err as Error)?.name;
+  if (name === 'TimeoutError' || (err instanceof TypeError && err.message === 'fetch failed')) return 'UPSTREAM_ERROR';
+  return 'TOOL_ERROR';
+}
+
+/** The `tool <name>` ids of the MCP tools, recorded with status class `error` (closed set, from the code). */
+export function toolMethods (toolNames: readonly string[]): string[] {
+  return toolNames.map((n) => `tool ${n}`);
+}
+
+/**
+ * Records each failed tool call: `tool <name>` / `error` in hds.calls (which tool) and its code in hds.errors (why).
+ * Successes are not recorded: the POST that carried them already is, and counting them again would dilute the
+ * service's 5xx rate condition (a percentage of all hds.calls). Installed by httpMain when telemetry is on.
+ */
+export function toolObserver (obs: HttpObservability) {
+  return (tool: string, err: unknown | null, durationMs: number) => {
+    if (err == null) return;
+    try {
+      obs.recordCall(`tool ${tool}`, 'error', durationMs);
+      obs.recordError(toolErrorCodeOf(err));
+    } catch { /* telemetry must never break a tool call */ }
+  };
 }
 
 /** Timing middleware: install first. Records on `finish`, only for a registered id; never breaks a response. */

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { version } from '../server.ts';
+import { getApiEndpoint, isConnected } from '../auth/session.ts';
+import { scrubReport } from '../lib/scrubber.ts';
 
 const NEW_ISSUE = 'https://github.com/healthdatasafe/site-agents/issues/new';
 const MAX_URL = 6000;
@@ -15,13 +17,32 @@ export const reportProblemInput = {
 
 type Input = { asked: string; happened: string; client?: string; step?: string };
 
+/** The connected account's name (`<username>.<platform domain>/` or `<host>/<username>/`), to keep it out of the report. */
+function connectedUsername (): string | null {
+  try {
+    if (!isConnected()) return null;
+    const url = new URL(getApiEndpoint());
+    const labels = url.hostname.split('.');
+    if (labels.length >= 4) return labels[0];
+    return url.pathname.split('/').filter(Boolean)[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * A prefilled "Agent problem" issue link (site-agents) for the person to open and post: HDS files nothing itself.
  * The counterpart of report_missing_item for problems with the connector rather than gaps in the data model.
  */
 export async function reportProblemHandler (
-  { asked, happened, client, step }: Input
+  input: Input
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
+  // Every free-text field: the link opens an issue on a public repo (B-2026-11-09-10).
+  const opts = { username: connectedUsername() };
+  const asked = scrubReport(input.asked, opts);
+  const happened = scrubReport(input.happened, opts);
+  const client = input.client == null ? undefined : scrubReport(input.client, opts);
+  const step = input.step;
   const body = [
     '**What did you ask your agent to do?**', asked, '',
     '**What happened instead?**', happened, '',

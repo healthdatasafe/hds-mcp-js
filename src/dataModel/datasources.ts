@@ -1,6 +1,7 @@
 import { SERVICE_INFO } from '../lib/hostPolicy.ts';
 import { getServiceInfoUrl } from '../auth/session.ts';
 import type { DataModelPack } from './pack.ts';
+import { policyFetch, UpstreamError } from '../lib/fetchPolicy.ts';
 
 export interface DatasourceDef {
   label?: Record<string, string>;
@@ -17,8 +18,8 @@ const assetsCache = new Map<string, Record<string, string>>();
 async function serviceAssets (serviceInfoUrl: string): Promise<Record<string, string>> {
   const cached = assetsCache.get(serviceInfoUrl);
   if (cached) return cached;
-  const res = await fetch(serviceInfoUrl);
-  if (!res.ok) throw new Error(`service-info fetch failed: HTTP ${res.status}`);
+  const res = await policyFetch(serviceInfoUrl);
+  if (!res.ok) throw new UpstreamError(`service-info fetch failed: HTTP ${res.status}`, res.status);
   const assets = ((await res.json()) as { assets?: Record<string, string> }).assets ?? {};
   assetsCache.set(serviceInfoUrl, assets);
   return assets;

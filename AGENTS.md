@@ -212,7 +212,8 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
 - `HDS_MCP_SCOPES` (space-separated) is published as `scopes_supported`: the default a client asks for when it names
   no scope (Claude Code). Demo: `offline_access` + `hds/stream/<root>.read` on the 17 connector-row roots (perki,
   read-only default).
-- Not offered over HTTP: `connect` (OAuth signs in) and `ensure_streams` (no grant carries `manage`).
+- Not offered over OAuth: `connect` (OAuth signs in) and `ensure_streams` (no grant carries `manage`). Raw mode
+  (below) offers both: its own `connect`, and `ensure_streams` under its master access.
 - **Step-up** ([`src/http/stepUp.ts`](src/http/stepUp.ts)): before the transport, a `create_event` / `import_batch`
   whose target root the token cannot write gets 403 `insufficient_scope` with `scope` = current scopes plus
   `hds/stream/<root>.contribute` (plan 118 D-J3). Streams outside the model are left to the core.
