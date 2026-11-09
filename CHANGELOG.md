@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-11-09
+
+### Fixed
+- `report_problem` scrubs every free-text field before building the public GitHub link: tokens (URL userinfo,
+  `Bearer`, `auth=` and other token parameters), emails, per-user addresses (`{username}.api.datasafe.dev`), query
+  strings and fragments, long opaque ids, and the connected account's name. Logs and tool errors now also mask
+  `Bearer` values and token parameters (B-2026-11-09-10).
+- Every outbound call of the tools (core API, sign-in, service info, data-model pack, datasets) has a timeout (60 s
+  core API, 30 s pack, 10 s otherwise) and never follows a redirect (B-2026-11-09-11). A failed pack load is
+  retried by the next call instead of being kept until restart.
+- Telemetry: a failed tool call (an HTTP 200 with `isError`) is now counted: `tool <name>` / `error` in `hds.calls`,
+  its kind in `hds.errors` (B-2026-11-09-12). New codes `RATE_LIMITED` (429) and `TOOL_ERROR` (the tool refused);
+  502/503/504 and an upstream 5xx are `UPSTREAM_ERROR`, other 4xx `BAD_REQUEST` (B-2026-11-05-8, as lib-bridge-js
+  0.16.1).
+- Docs: the README lists all nineteen tools, AGENTS.md says raw mode offers `ensure_streams`, and `engines` asks for
+  Node ≥ 22.18, which runs the `.ts` scripts directly (B-2026-11-09-13).
+
 ## [0.19.2] - 2026-11-09
 
 ### Fixed

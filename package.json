@@ -1,10 +1,10 @@
 {
   "name": "hds-mcp",
-  "version": "0.19.2",
+  "version": "0.20.0",
   "description": "MCP server exposing Health Data Safe / Pryv tools to AI agents (non-developer first)",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=22.18"
   },
   "bin": {
     "hds-mcp": "dist/index.js",
