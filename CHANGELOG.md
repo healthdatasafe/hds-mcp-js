@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [0.19.2] - 2026-11-09
+
+### Fixed
+- A 421 from the core (a token from another core at introspection or token exchange, a moved account in raw mode)
+  is handled as an answer again instead of a thrown "fetch failed": the core calls used `redirect: 'error'`, with
+  which Node's fetch fails any 421 (B-2026-11-09-1). Redirects are still never followed (`redirect: 'manual'`, a 3xx
+  is an error), so a token is never re-posted off the issuer's host.
+
 ## [0.19.1] - 2026-11-06
 
 ### Fixed
