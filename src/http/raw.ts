@@ -85,8 +85,10 @@ export function pollOnPlatform (poll: string, access: string): boolean {
 export function rawMode (cfg: RawConfig) {
   const sessions = new Map<string, Session>();
   const doFetch = cfg.fetchFn ?? fetch;
+  // Redirects are never followed; every caller treats a 3xx as not ok. Not 'error': undici then turns a 421 into a
+  // thrown "fetch failed" (B-2026-11-09-1).
   const call = (url: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS) =>
-    doFetch(url, { ...init, redirect: 'error', signal: AbortSignal.timeout(timeoutMs) });
+    doFetch(url, { ...init, redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
 
   const connectedCount = () => [...sessions.values()].filter((s) => s.credentials).length;
 

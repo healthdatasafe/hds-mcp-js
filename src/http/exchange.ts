@@ -65,8 +65,9 @@ export function exchangeVerifier (cfg: ExchangeConfig): ResourceTokenVerifier {
           subject_token_type: ACCESS_TOKEN_TYPE,
           subject_token_resource: resource.href
         }).toString(),
-        // A redirect would re-post the subject token off the issuer's host.
-        redirect: 'error',
+        // Never followed (a redirect would re-post the subject token off the issuer's host): a 3xx is not ok below.
+        // Not 'error': undici then turns a 421 from another core into a thrown "fetch failed" (B-2026-11-09-1).
+        redirect: 'manual',
         signal: AbortSignal.timeout(cfg.timeoutMs ?? 10_000)
       });
       const body = await res.json().catch(() => ({})) as ExchangeResponse & { coreUrl?: string };

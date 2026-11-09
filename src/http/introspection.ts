@@ -69,8 +69,9 @@ export function introspectionVerifier (cfg: IntrospectionConfig): OAuthTokenVeri
         method: 'POST',
         headers: { authorization: basic, 'content-type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({ token }).toString(),
-        // A redirect would re-post the token off the issuer's host.
-        redirect: 'error',
+        // Never followed (a redirect would re-post the token off the issuer's host): a 3xx is not ok below. Not 'error':
+        // undici then turns a 421 from another core into a thrown "fetch failed" (B-2026-11-09-1).
+        redirect: 'manual',
         signal: AbortSignal.timeout(cfg.timeoutMs ?? 10_000)
       });
       if (!res.ok) {

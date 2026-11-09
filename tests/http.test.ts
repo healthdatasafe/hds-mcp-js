@@ -389,7 +389,7 @@ test('exchangeVerifier: exchanges the connector token, calls the API with the de
   assert.deepEqual(info.scopes, ['hds/stream/body.read']);
   assert.ok(Math.abs(info.expiresAt! - (Date.now() / 1000 + 1200)) < 5);
   assert.equal(seen[0].auth, 'Basic ' + Buffer.from('mcp:s').toString('base64'));
-  assert.equal(seen[0].redirect, 'error');
+  assert.equal(seen[0].redirect, 'manual');
   assert.deepEqual([...seen[0].form.keys()].sort(), ['grant_type', 'subject_token', 'subject_token_resource', 'subject_token_type']);
   assert.equal(seen[0].form.get('grant_type'), 'urn:ietf:params:oauth:grant-type:token-exchange');
   assert.equal(seen[0].form.get('subject_token'), 'subject');
@@ -478,6 +478,43 @@ test('exchangeVerifier: a stalled token endpoint times out', async () => {
     })) as unknown as typeof fetch
   });
   await assert.rejects(v.verifyAccessToken('any'), /TimeoutError|timed out|aborted/i);
+});
+
+test('real fetch: a 421 from another core is an answer, a 307 is never followed (B-2026-11-09-1)', async () => {
+  let followed = 0;
+  const elsewhere = http.createServer((_req, res) => { followed++; res.end('{}'); });
+  await new Promise<void>((resolve) => elsewhere.listen(0, '127.0.0.1', resolve));
+  const away = `http://127.0.0.1:${(elsewhere.address() as AddressInfo).port}/oauth2/token`;
+  const core = http.createServer((req, res) => {
+    req.resume();
+    req.on('end', () => {
+      if (req.url!.startsWith('/redirect')) {
+        res.writeHead(307, { location: away });
+        return res.end();
+      }
+      res.writeHead(421, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'wrong_core', coreUrl: 'https://core-us1.example/' }));
+    });
+  });
+  await new Promise<void>((resolve) => core.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(core.address() as AddressInfo).port}`;
+  const common = {
+    clientId: 'mcp',
+    clientSecret: 's',
+    resourceUrl: new URL('https://mcp.demo.datasafe.dev/mcp'),
+    serviceInfoUrl: 'https://demo.datasafe.dev/reg/service/info'
+  };
+  try {
+    for (const path of ['/oauth2/token', '/redirect/oauth2/token']) {
+      await assert.rejects(exchangeVerifier({ ...common, tokenEndpoint: base + path }).verifyAccessToken('t'), ServerError, path);
+      await assert.rejects(introspectionVerifier({ ...common, introspectionEndpoint: base + path }).verifyAccessToken('t'),
+        /introspection failed: HTTP (421|307)/, path);
+    }
+    assert.equal(followed, 0, 'the token is never re-posted to the redirect target');
+  } finally {
+    core.close();
+    elsewhere.close();
+  }
 });
 
 test('introspectionVerifier: requireAudience refuses a token without aud, accepts the right one', async () => {
