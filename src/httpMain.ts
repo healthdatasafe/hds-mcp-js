@@ -10,6 +10,7 @@ import { httpMethods, initHttpObservability, toolMethods, toolObserver } from '.
 import { setToolObserver, TOOL_NAMES, version } from './server.ts';
 import { platformOf, resolveServiceInfoUrl } from './lib/hostPolicy.ts';
 import { safeLog } from './lib/scrubber.ts';
+import { issuesConfig } from './tools/reportProblem.ts';
 
 function required (name: string): string {
   const v = process.env[name];
@@ -21,6 +22,8 @@ const issuer = required('HDS_MCP_ISSUER').replace(/\/$/, '');
 const publicUrl = new URL(required('HDS_MCP_PUBLIC_URL'));
 const serviceInfoUrl = resolveServiceInfoUrl(process.env.HDS_MCP_SERVICE_INFO ?? 'demo');
 const port = Number(process.env.PORT ?? 3000);
+// report_problem's issue intake: a misconfiguration fails here, not at the first report.
+const issues = issuesConfig();
 
 const metaRes = await fetch(`${issuer}/.well-known/oauth-authorization-server`, { signal: AbortSignal.timeout(10_000) });
 if (!metaRes.ok) throw new Error(`Cannot read the authorization server metadata of ${issuer}: HTTP ${metaRes.status}`);
@@ -87,7 +90,7 @@ const app = createHttpApp({
       requireAudience: process.env.HDS_MCP_REQUIRE_AUDIENCE !== 'false'
     })
 });
-const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}, ${tokenExchange ? 'token exchange' : 'introspection'}${raw ? ', raw mode on' : ''}${perUserDomain ? `, per-user on *.${perUserDomain}` : ''}`));
+const server = app.listen(port, () => safeLog(`hds-mcp HTTP listening on :${port}, resource ${publicUrl.href}, issuer ${issuer}, ${tokenExchange ? 'token exchange' : 'introspection'}${raw ? ', raw mode on' : ''}${perUserDomain ? `, per-user on *.${perUserDomain}` : ''}${issues ? `, reports to ${issues.base.origin}${issues.key ? ` as ${issues.keyId}` : ' (anonymous)'}` : ''}`));
 
 // Flush the last telemetry window on a Dokku stop / redeploy; raw mode deletes the accesses it holds.
 process.once('SIGTERM', () => {

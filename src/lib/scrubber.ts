@@ -21,14 +21,29 @@ const PLATFORM_LABELS = new Set(['reg', 'access', 'mfa', 'sw', 'hfs', 'previews'
 // and stream ids (`fertility-cycles-average-peak-day`) stay readable.
 const LONG_OPAQUE_RE = /\b(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{24,}\b/g;
 
+// `Authorization: <anything>` (Pryv takes the raw token there, no scheme), cookies, API-key headers: the value to the
+// end of the line. Over-scrubbing the rest of a sentence is the safe side.
+const HEADER_SECRET_RE = /\b(authorization|proxy-authorization|cookie|set-cookie|x-api-key)([ \t]*:[ \t]*)[^\r\n"]+/gi;
+// The same secrets as JSON keys, as they appear in a serialized request or error object.
+const JSON_SECRET_RE = /("(?:auth|token|access_?token|refresh_?token|id_?token|password|password_?hash|secret|client_?secret|api_?endpoint|authorization|cookie)"\s*:\s*)"(?:[^"\\]|\\.)*"/gi;
+// An apiEndpoint (`https://<token>@<host>/<path>`): reduced to scheme + host, so a path-style username goes too.
+const API_ENDPOINT_RE = /(https?:\/\/)[^@/\s"'<>]+@([A-Za-z0-9.-]+(?::\d+)?)[^\s"'<>)\]]*/gi;
+
 /**
- * Free text bound for a public place (report_problem's prefilled GitHub issue): the credentials of scrubTokens,
- * plus what identifies the person: emails, per-user hostnames, query strings and fragments, long opaque values, and
- * the connected account's name when known. The tool description also asks the model to leave these out; this is the
- * net under it.
+ * Free text bound for a report (report_problem's draft: the HDS review page or a public GitHub issue): the credentials
+ * of scrubTokens, plus header and JSON secrets, any URL with userinfo reduced to scheme + host, and what identifies the
+ * person: emails, per-user hostnames, query strings and fragments, long opaque values, and the connected account's
+ * name when known. The tool description also asks the model to leave these out; this is the net under it.
+ *
+ * Without `username` the output is byte-identical to hds-issues-service `scrubIntake` (no publishUsername), the scrub
+ * the intake applies again before filing: tests/scrubber.test.ts pins the same table as that service's scrub tests.
  */
 export function scrubReport (value: string, { username }: { username?: string | null } = {}): string {
-  let s = scrubTokens(value);
+  let s = String(value);
+  s = s.replace(JSON_SECRET_RE, '$1"***"');
+  s = s.replace(HEADER_SECRET_RE, '$1$2***');
+  s = s.replace(API_ENDPOINT_RE, '$1***@$2/');
+  s = scrubTokens(s);
   s = s.replace(URL_QUERY_RE, '$1?…');
   s = s.replace(EMAIL_RE, '[email]');
   s = s.replace(PER_USER_HOST_RE, (m, label: string, rest: string) =>

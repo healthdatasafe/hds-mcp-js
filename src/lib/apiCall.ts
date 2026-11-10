@@ -36,7 +36,7 @@ export async function apiGet (path: string, query?: Record<string, unknown>): Pr
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (body as any)?.error?.message ?? `HTTP ${res.status}`;
-    throw new UpstreamError(`Pryv ${path} failed: ${msg}`, res.status);
+    throw new UpstreamError(`Pryv ${path} failed: ${msg}`, res.status, (body as any)?.error?.id);
   }
   return body;
 }
@@ -54,7 +54,7 @@ export async function apiPost (path: string, body: unknown): Promise<any> {
   const respBody = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (respBody as any)?.error?.message ?? `HTTP ${res.status}`;
-    throw new UpstreamError(`Pryv POST ${path} failed: ${msg}`, res.status);
+    throw new UpstreamError(`Pryv POST ${path} failed: ${msg}`, res.status, (respBody as any)?.error?.id);
   }
   return respBody;
 }
@@ -74,7 +74,7 @@ export async function apiBatch (
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (body as any)?.error?.message ?? `HTTP ${res.status}`;
-    throw new UpstreamError(`Pryv batch failed: ${msg}`, res.status);
+    throw new UpstreamError(`Pryv batch failed: ${msg}`, res.status, (body as any)?.error?.id);
   }
   return (body as any).results ?? [];
 }

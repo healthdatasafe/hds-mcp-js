@@ -127,7 +127,7 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `get_connection` | Say which platform (demo or production) the session uses and whether it is connected | *"Am I on my real account?"* |
 | `get_import_guide` | The steps and rules for importing medical history (documents, lab reports, app exports) | *"Import my lab reports."* |
 | `report_missing_item` | Prepare a GitHub issue asking HDS to add a missing item; you post it yourself | *"HDS has nothing for this test, tell them."* |
-| `report_problem` | Prepare a GitHub issue about a connector failure; you post it yourself | *"This keeps failing, report it."* |
+| `report_problem` | Prepare a draft report about a connector failure; you read it and send it yourself | *"This keeps failing, report it."* |
 | `open_account` | Link to the HDS account panel for account tasks, your username filled in | *"I want to change my email."* |
 
 ---
@@ -165,11 +165,18 @@ next session starts back in the safe state.
   quits.
 - The MCP scrubs your token from any log line or error message before
   writing it. There's a unit test that pins this.
-- `report_problem` prepares a link to a **public** GitHub issue. Before
-  building it, the MCP removes tokens, emails, your account name and
-  per-user addresses, link parameters and long ids from what the agent
-  wrote. Read the report before you post it: a name or a value written in
-  plain words is not caught.
+- `report_problem` prepares a draft; nothing is published until you
+  review and send it. Before building it, the MCP removes tokens, emails,
+  your account name and per-user addresses, link parameters and long ids
+  from what the agent wrote. Read the report before you send it: a name or
+  a value written in plain words is not caught.
+  - With `HDS_MCP_ISSUES_URL` set (the HDS issues service), the link opens
+    an HDS page holding the draft in the part of the link after `#`, which
+    your browser never sends anywhere. You edit it there and send it to the
+    HDS team (not public, no account needed); the service removes tokens
+    and emails again.
+  - Without it, the link opens a prefilled issue on the **public** GitHub
+    repo `site-agents`, which you post with a GitHub account.
 
 ---
 

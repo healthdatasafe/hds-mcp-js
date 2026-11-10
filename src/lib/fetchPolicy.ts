@@ -19,11 +19,19 @@ export async function policyFetch (url: string | URL, init: RequestInit = {}, ti
   }
 }
 
-/** An upstream answered with this HTTP status: kept so a tool failure can be counted by kind (observability). */
+/** A core error id (`forbidden`, `unknown-resource`, …): a fixed slug, never free text. */
+const ERROR_ID_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+
+/**
+ * An upstream answered with this HTTP status: kept so a tool failure can be counted by kind (observability). `errorId`
+ * is the core's `error.id` when it answered one, for report_problem's draft.
+ */
 export class UpstreamError extends Error {
   readonly status: number;
-  constructor (message: string, status: number) {
+  readonly errorId: string | null;
+  constructor (message: string, status: number, errorId?: unknown) {
     super(message);
     this.status = status;
+    this.errorId = typeof errorId === 'string' && ERROR_ID_RE.test(errorId) ? errorId : null;
   }
 }
