@@ -148,6 +148,31 @@ underlying error body shape is
 
 ---
 
+## `report_problem` and the HDS issue intake
+
+`report_problem` never sends anything: it returns a link, and its result tells the agent *"A draft was prepared;
+nothing is published until the person reviews and sends it."*
+
+- **`HDS_MCP_ISSUES_URL` set** (the https base URL of `hds-issues-service`; http only on the loopback, for local
+  runs): the link is `<url>/new#<base64url(JSON draft)>`, with the draft
+  `{ v: 1, source: "mcp", component: "report_problem", version, env: "demo" | "prod", title, body, att? }` (the
+  intake's `docs/SERVICE-API.md`). The fragment never reaches a server; the person edits and sends it from the review
+  page. `att` is added only when `HDS_MCP_ISSUES_KEY` + `HDS_MCP_ISSUES_KEY_ID` are set (a deployed MCP's source key,
+  ≥ 16 chars, and its id in the intake's `attestation:keys`, e.g. `hds-mcp-us1`) **and** a session is connected:
+  `b64url(claims).b64url(HMAC-SHA256(key, b64url(claims)))`, claims `{ src, r: "verified", env, iat }`, no username
+  and no token. Otherwise the report is anonymous. `env` is the connected platform (demo when not connected). The
+  stdio MCP holds no key.
+- **Unset:** the prefilled `site-agents` GitHub issue link, as before.
+- Every free-text field goes through `scrubReport` ([`lib/scrubber.ts`](src/lib/scrubber.ts)), whose output without
+  a username is byte-identical to the intake's `scrubIntake`; `tests/scrubber.test.ts` pins the intake's table. Change
+  both together.
+- The body names the last tool that failed in this server instance and the core's `error.id`
+  (`UpstreamError.errorId`, from `apiGet` / `apiPost` / `apiBatch`). One instance per stdio process and per raw-mode
+  session; over OAuth a server lives for one request, so the agent's `happened` text is the only source there.
+- The URL is capped at 6000 characters in both modes.
+
+---
+
 ## How to extend (when adding a new tool)
 
 1. Add the tool implementation under [`src/tools/`](src/tools/) — one
@@ -239,7 +264,8 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
 `dokku ports:set <app> http:80:7450 https:443:7450`). `GET /status` answers `{ status, name, version }` without auth:
 the Dokku startup healthcheck (`app.json`) and the deploy's version assertion read it. Environment: `HDS_MCP_ISSUER`,
 `HDS_MCP_PUBLIC_URL`, `HDS_MCP_INTROSPECT_CLIENT_ID`, `HDS_MCP_INTROSPECT_CLIENT_SECRET`, `HDS_MCP_SERVICE_INFO`,
-`HDS_MCP_ALLOWED_ORIGINS`, `PORT`, and for telemetry `HDS_OTEL_ENDPOINT` (the host collector's bare base URL,
+`HDS_MCP_ALLOWED_ORIGINS`, `PORT`, for `report_problem` `HDS_MCP_ISSUES_URL` / `HDS_MCP_ISSUES_KEY` /
+`HDS_MCP_ISSUES_KEY_ID` (see above; the key is a per-env secret), and for telemetry `HDS_OTEL_ENDPOINT` (the host collector's bare base URL,
 `http://172.17.0.1:4318`; unset = telemetry off) and `HDS_OTEL_SERVICE_NAME` (`hds-<env>-mcp`; default built from
 `HDS_ENV`, itself defaulting to `dev`). Telemetry goes only through `hds-observability-js`
 ([`src/http/observability.ts`](src/http/observability.ts)): aggregate counts per registered route, never a concrete

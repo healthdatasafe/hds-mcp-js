@@ -17,11 +17,12 @@ import { deleteEventsInput, deleteEventsHandler } from './tools/deleteEvents.ts'
 import { reportMissingItemInput, reportMissingItemHandler } from './tools/reportMissingItem.ts';
 import { getImportGuideInput, getImportGuideHandler } from './tools/getImportGuide.ts';
 import { getConnectionInput, getConnectionHandler } from './tools/getConnection.ts';
-import { reportProblemInput, reportProblemHandler } from './tools/reportProblem.ts';
+import { reportProblemInput, reportProblemHandler, type LastFailure } from './tools/reportProblem.ts';
 import { openAccountInput, openAccountHandler } from './tools/openAccount.ts';
 import { extendWriteHint } from './http/stepUp.ts';
 import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
+import { UpstreamError } from './lib/fetchPolicy.ts';
 
 /** Every tool buildServer can register: the closed set of `tool <name>` telemetry ids. */
 export const TOOL_NAMES = [
@@ -36,7 +37,7 @@ let toolObserver: ToolObserver | null = null;
 /** HTTP telemetry: called once per tool call, err null on success. A tool error is a 200 + isError, invisible per route. */
 export function setToolObserver (fn: ToolObserver | null): void { toolObserver = fn; }
 
-function wrap<T> (name: ToolName, handler: (a: T) => Promise<any>) {
+function wrapTool<T> (name: ToolName, handler: (a: T) => Promise<any>, onFailure: (f: LastFailure) => void) {
   return async (args: T) => {
     const start = performance.now();
     try {
@@ -45,6 +46,7 @@ function wrap<T> (name: ToolName, handler: (a: T) => Promise<any>) {
       return result;
     } catch (err) {
       toolObserver?.(name, err, performance.now() - start);
+      if (name !== 'report_problem') onFailure({ tool: name, errorId: err instanceof UpstreamError ? err.errorId : null, at: Date.now() });
       const safe = scrubError(err);
       return {
         isError: true,
@@ -65,6 +67,11 @@ const PRIVACY_DISCLOSURE = 'Before reading any health record, tell the user in p
 export function buildServer (
   { http = false, oauth = false, extraTools, platform }: { http?: boolean; oauth?: boolean; extraTools?: (server: McpServer) => void; platform?: Platform } = {}
 ): McpServer {
+  // The last failed tool of this server, for report_problem's draft. One server per stdio process and per raw-mode
+  // session (one person each); over OAuth a server lives for one request, so a failure in an earlier request is not seen.
+  let lastFailure: LastFailure | null = null;
+  const wrap = <T>(name: ToolName, handler: (a: T) => Promise<any>) => wrapTool(name, handler, (f) => { lastFailure = f; });
+
   const server = new McpServer({
     name: 'hds-mcp',
     version
@@ -72,7 +79,7 @@ export function buildServer (
     instructions: 'Health Data Safe (HDS) account tools. ' + PRIVACY_DISCLOSURE +
       ' Always look data up in the HDS data model (search_items, get_item) before writing it.' +
       ' To import someone\'s medical history (documents, lab reports, photos, spreadsheets, app exports), read get_import_guide first.' +
-      ' When no item fits their data, tell them and offer report_missing_item; when this connector itself fails, offer report_problem.' +
+      ' When no item fits their data, tell them and offer report_missing_item; when this connector itself fails, offer report_problem: it prepares a draft, and nothing is published until the person reviews and sends it.' +
       ' Account tasks (email, password, two-step sign-in, connected apps, consents, exporting or deleting the account) are ' +
       'done in the HDS account panel, not with these tools: call open_account and give the person its link.' +
       // OAuth: writes are consented per kind of data; a refused write is the person's consent, not a fault.
@@ -213,9 +220,9 @@ export function buildServer (
 
   server.tool(
     'report_problem',
-    'When this connector fails in a way the person cannot fix (a tool error, a refused sign-in, wrong behaviour), prepare a problem report for the HDS team: returns a prefilled GitHub issue link (site-agents, agent problem) for the person to open and post themselves; nothing is sent by this tool. Put only what was asked and the error as-is: never their health data, names, account name or links.',
+    'When this connector fails in a way the person cannot fix (a tool error, a refused sign-in, wrong behaviour), prepare a problem report for the HDS team: returns a link to the draft (an HDS review page, or a prefilled GitHub issue on site-agents) for the person to read, edit and send themselves; nothing is sent by this tool. Put only what was asked and the error as-is: never their health data, names, account name or links.',
     reportProblemInput,
-    wrap('report_problem', reportProblemHandler)
+    wrap('report_problem', (input: Parameters<typeof reportProblemHandler>[0]) => reportProblemHandler(input, lastFailure))
   );
 
   server.tool(

@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-11-10
+
+### Added
+- `report_problem` can hand the person the HDS issue intake's review page instead of a GitHub link: with
+  `HDS_MCP_ISSUES_URL` set (the intake's https base URL), it returns `<url>/new#<draft>`, the draft (title, body,
+  MCP version, platform) base64url-encoded in the URL fragment, which no browser sends to a server. The person reads,
+  edits and sends it from that page, with no account. With `HDS_MCP_ISSUES_KEY` and `HDS_MCP_ISSUES_KEY_ID` (a
+  deployed MCP's source key and its id on the intake) and a signed-in session, the draft carries an HMAC attestation
+  that only says an HDS session existed: no username, no token. Without `HDS_MCP_ISSUES_URL`, the GitHub link as
+  before. A key without its id, a key under 16 characters or a non-https URL stops the HTTP server at start.
+- The drafted body names the last tool that failed in the session and the core's error id when it gave one (stdio
+  and raw mode; over OAuth each request is its own session, so the agent's own words carry it).
+
+### Changed
+- `report_problem` says "A draft was prepared; nothing is published until the person reviews and sends it" in both
+  modes (was "Nothing has been sent"); the server instructions and the tool description say the same.
+- The report scrub reduces any URL with credentials to scheme + host (`https://***@{username}.api.datasafe.dev/`,
+  path and query dropped) and masks `Authorization:` / `Cookie:` headers and secret JSON keys, the same output as the
+  intake's own scrub, which runs again before anything is filed.
+- CI runs on ubuntu-24.04.
+
 ## [0.20.0] - 2026-11-09
 
 ### Fixed

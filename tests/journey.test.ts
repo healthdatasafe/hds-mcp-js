@@ -104,14 +104,38 @@ test('server instructions name the platform of a remote MCP', async () => {
   assert.match(instructions(buildServer()), /get_connection/);
 });
 
-test('report_problem: a prefilled agent-problem issue link with the version, nothing sent', async () => {
+const DRAFT_TEXT = /A draft was prepared; nothing is published until the person reviews and sends it\./;
+
+test('report_problem without HDS_MCP_ISSUES_URL: a prefilled agent-problem issue link with the version, nothing published', async () => {
   const { reportProblemHandler } = await import('../src/tools/reportProblem.ts');
   const res = await reportProblemHandler({ asked: 'connect to my account', happened: 'connect_status: Sign-in could not be used', client: 'Claude.ai web', step: 'connect' });
   const url = new URL(res.content[0].text.split('\n').pop()!);
+  assert.equal(url.origin + url.pathname, 'https://github.com/healthdatasafe/site-agents/issues/new');
   assert.equal(url.searchParams.get('template'), 'agent-problem.md');
   assert.equal(url.searchParams.get('title'), 'MCP problem: connect to my account');
   assert.match(url.searchParams.get('body') ?? '', /HDS MCP: \d+\.\d+\.\d+/);
-  assert.match(res.content[0].text, /Nothing has been sent/);
+  assert.match(res.content[0].text, DRAFT_TEXT);
+  assert.doesNotMatch(res.content[0].text, /Nothing has been sent/);
+});
+
+test('report_problem with HDS_MCP_ISSUES_URL: the review page, the draft in the fragment, nothing published', async (t) => {
+  const { reportProblemHandler } = await import('../src/tools/reportProblem.ts');
+  process.env.HDS_MCP_ISSUES_URL = 'https://issues.example.test';
+  t.after(() => { delete process.env.HDS_MCP_ISSUES_URL; });
+  const res = await reportProblemHandler({ asked: 'connect to my account', happened: 'connect_status: Sign-in could not be used', client: 'Claude.ai web', step: 'connect' });
+  const url = new URL(res.content[0].text.split('\n').pop()!);
+  assert.equal(url.origin + url.pathname + url.search, 'https://issues.example.test/new');
+  const draft = JSON.parse(Buffer.from(url.hash.slice(1), 'base64url').toString('utf8'));
+  assert.equal(draft.title, 'MCP problem: connect to my account');
+  assert.match(res.content[0].text, DRAFT_TEXT);
+  assert.match(res.content[0].text, /no account needed/);
+});
+
+test('server instructions: report_problem prepares a draft, nothing published until the person sends it', async () => {
+  const { buildServer } = await import('../src/server.ts');
+  const s = buildServer() as any;
+  assert.match(s.server._instructions, /offer report_problem: it prepares a draft, and nothing is published until the person reviews and sends it\./);
+  assert.match(s._registeredTools.report_problem.description, /read, edit and send themselves; nothing is sent by this tool/);
 });
 
 test('ensure_streams: offered in stdio and raw mode (manage), never over OAuth', async () => {

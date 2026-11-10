@@ -51,7 +51,8 @@ test('report_problem: the exact bytes of the link hold none of the identifiers (
   }
   const url = new URL(href);
   assert.equal(url.searchParams.get('title'), 'MCP problem: read {username} weight');
-  assert.match(url.searchParams.get('body') ?? '', /get_events: Pryv events failed at https:\/\/\*\*\*@\{username\}\.api\.datasafe\.dev\/events\?…/);
+  // A URL with userinfo is reduced to scheme + host, as hds-issues-service does.
+  assert.match(url.searchParams.get('body') ?? '', /get_events: Pryv events failed at https:\/\/\*\*\*@\{username\}\.api\.datasafe\.dev\/ with Bearer \*\*\*/);
 });
 
 async function serve (handler: http.RequestListener): Promise<{ base: string; close: () => void }> {
