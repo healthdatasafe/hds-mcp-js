@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-11-10
+
+### Security
+- Production dependency advisories fixed (`npm audit --omit=dev`: 5 high + 1 moderate → 0):
+  `@modelcontextprotocol/sdk` 1.29.0 → 1.32.2, `hono`, `@hono/node-server`, `ip-address`, `fast-uri` (lockfile), and
+  `zod` 3.25 → 4.6.7 (GHSA-mrhx-c7xc-m3w5, unbounded allocation when validating oversized constrained collections;
+  no 3.x fix exists). The SDK accepts `zod ^3.25 || ^4.0`.
+- Advertised tool input schemas are unchanged in their properties. Under zod 4 they no longer carry
+  `additionalProperties: false` (unknown keys are still stripped at runtime, as before), integers gain an explicit
+  safe-integer bound, and records gain `propertyNames: { type: string }`.
+
 ## [0.21.0] - 2026-11-10
 
 ### Added
