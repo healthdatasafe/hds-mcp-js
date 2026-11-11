@@ -22,7 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY package.json package-lock.json tsconfig.json tsconfig.build.json ./
+COPY package.json package-lock.json .npmrc tsconfig.json tsconfig.build.json ./
 COPY src ./src
 
 # Lockfile `resolved` URLs are git+ssh; the repos are public, so rewrite to https and no deploy key is needed.
