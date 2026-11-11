@@ -84,7 +84,9 @@ export function buildServer (
       'done in the HDS account panel, not with these tools: call open_account and give the person its link.' +
       // OAuth: writes are consented per kind of data; a refused write is the person's consent, not a fault.
       (oauth
-        ? ' The person consents per kind of data, and can widen it later. Before adding data, call get_connection: if the ' +
+        ? ' The person consents per kind of data, and can widen it later. Genetic results are sensitive and off by default: ' +
+          'never ask the person to grant them unless they asked you to read or add genetic results. ' +
+          'Before adding data, call get_connection: if the ' +
           'kind of data is not in what this connection may add to, tell the person which one the request needs and how to ' +
           'grant it, then wait. A write refused as Forbidden / insufficient_scope means the same, not a fault. ' + extendWriteHint([])
         : '') +

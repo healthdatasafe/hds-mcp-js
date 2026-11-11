@@ -39,7 +39,8 @@ function rootName (node: { id: string; name?: unknown }): string {
 export function extendWriteHint (names: string[]): string {
   return `To add data${names.length ? ` to ${names.map((n) => `"${n}"`).join(', ')}` : ''}, the person reconnects the ` +
     'HDS connector in their AI assistant\'s connector settings (disconnect, then connect) and, on the HDS consent ' +
-    `screen, keeps "Add and modify${names.length === 1 ? ` ${names[0]}` : ''}" ticked. Do not retry the write before they have.`;
+    `screen, ticks "Add and modify${names.length === 1 ? ` ${names[0]}` : ''}" (genetic results are unticked unless they ` +
+    'tick them). Do not retry the write before they have.';
 }
 
 /** The model roots this connection may add to and those it may only read, by name. */
