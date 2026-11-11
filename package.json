@@ -63,5 +63,8 @@
   },
   "optionalDependencies": {
     "hds-observability-js": "github:healthdatasafe/hds-observability-js"
+  },
+  "allowScripts": {
+    "github:healthdatasafe/hds-observability-js": true
   }
 }
