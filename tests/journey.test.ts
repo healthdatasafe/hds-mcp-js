@@ -50,7 +50,7 @@ test('write access: roots by name, write vs read only, and the reconnect hint', 
   assert.deepEqual(writeAccess(['offline_access', 'hds/stream/body.contribute', 'hds/stream/profile.read', 'hds/stream/family.manage'], named),
     { write: ['Body', 'family'], readOnly: ['Profile'] });
   assert.deepEqual(rootNames(['hds/stream/body.contribute', 'hds/stream/unknown.contribute'], named), ['Body', 'unknown']);
-  assert.match(extendWriteHint(['Body']), /add data to "Body".*reconnects the HDS connector.*"Add and modify Body" ticked/);
+  assert.match(extendWriteHint(['Body']), /add data to "Body".*reconnects the HDS connector.*ticks "Add and modify Body".*genetic results are unticked/);
   assert.match(extendWriteHint([]), /^To add data, the person reconnects/);
 });
 

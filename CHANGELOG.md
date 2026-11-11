@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+- Genetic results (plan 115, REVIEW-2026-11-11-GENETICS-FABLE): the OAuth instructions tell the assistant genetic
+  results are off by default and never to ask for them unless the person asked to read or add genetic results; the
+  write hint says the person *ticks* "Add and modify …" on the consent screen (genetic results come unticked). The
+  connector rows can carry `hds/stream/genetics.contribute` in `HDS_MCP_SCOPES` once the core's extension offers it
+  unticked (hds-fhir-js `explicitGrantOnly`).
+
 ## [0.21.1] - 2026-11-10
 
 ### Security
