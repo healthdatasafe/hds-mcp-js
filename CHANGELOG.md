@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-11-11
+
 ### Changed
 - Genetic results (plan 115, REVIEW-2026-11-11-GENETICS-FABLE): the OAuth instructions tell the assistant genetic
   results are off by default and never to ask for them unless the person asked to read or add genetic results; the
