@@ -176,7 +176,9 @@ next session starts back in the safe state.
     an HDS page holding the draft in the part of the link after `#`, which
     your browser never sends anywhere. You edit it there and send it to the
     HDS team (not public, no account needed); the service removes tokens
-    and emails again.
+    and emails again. When you are signed in to a remote HDS MCP, the link
+    also carries your HDS username, signed by the MCP: the page shows it
+    and adds it to the report only if you tick the box.
   - Without it, the link opens a prefilled issue on the **public** GitHub
     repo `site-agents`, which you post with a GitHub account.
 

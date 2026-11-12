@@ -1,6 +1,7 @@
 import { createHmac } from 'node:crypto';
 import { z } from 'zod';
 import { version } from '../server.ts';
+import { apiGet } from '../lib/apiCall.ts';
 import { getApiEndpoint, getServiceInfoUrl, isConnected } from '../auth/session.ts';
 import { scrubReport } from '../lib/scrubber.ts';
 import { platformOf, SERVICE_INFO } from '../lib/hostPolicy.ts';
@@ -75,8 +76,32 @@ function connectedUsername (): string | null {
  * b64url(claims)))`. The claims say only that an HDS session existed: no username, no token.
  */
 export function attest (key: string, keyId: string, env: 'demo' | 'prod', now = Date.now()): string {
-  const encoded = Buffer.from(JSON.stringify({ src: keyId, r: 'verified', env, iat: Math.floor(now / 1000) })).toString('base64url');
+  return signClaims(key, { src: keyId, r: 'verified', env, iat: Math.floor(now / 1000) });
+}
+
+const USERNAME_RE = /^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/;
+
+/**
+ * hds-issues-service signed username (`idt`, its docs/SERVICE-API.md): the same key, claims `{ src, u, env, iat }`. The
+ * review page offers "add my HDS username" only with it and sends it only when ticked; `att` stays identity-free.
+ */
+export function identify (key: string, keyId: string, env: 'demo' | 'prod', username: string, now = Date.now()): string {
+  return signClaims(key, { src: keyId, u: username, env, iat: Math.floor(now / 1000) });
+}
+
+function signClaims (key: string, claims: object): string {
+  const encoded = Buffer.from(JSON.stringify(claims)).toString('base64url');
   return `${encoded}.${createHmac('sha256', key).update(encoded).digest('base64url')}`;
+}
+
+/** The connected account's username as the core states it (`access-info`), or null when it cannot be read. */
+async function attestedUsername (): Promise<string | null> {
+  try {
+    const u = (await apiGet('access-info'))?.user?.username;
+    return typeof u === 'string' && USERNAME_RE.test(u) ? u : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -113,8 +138,13 @@ export async function reportProblemHandler (
 
   if (issues != null) {
     const env = platformOf(getServiceInfoUrl() ?? SERVICE_INFO.demo) === 'production' ? 'prod' : 'demo';
-    const att = issues.key != null && issues.keyId != null && isConnected() ? attest(issues.key, issues.keyId, env) : null;
-    const draft = { v: 1, source: 'mcp', component: 'report_problem', version, env, title, body, ...(att != null ? { att } : {}) };
+    const { key, keyId } = issues;
+    const signer = key != null && keyId != null && isConnected() ? { key, keyId } : null;
+    const att = signer != null ? attest(signer.key, signer.keyId, env) : null;
+    const username = signer != null ? await attestedUsername() : null;
+    const idt = signer != null && username != null ? identify(signer.key, signer.keyId, env, username) : null;
+    const signed = { ...(att != null ? { att } : {}), ...(idt != null ? { idt } : {}) };
+    const draft = { v: 1, source: 'mcp', component: 'report_problem', version, env, title, body, ...signed };
     const href = new URL('new', issues.base).href + '#' + Buffer.from(JSON.stringify(draft), 'utf8').toString('base64url');
     if (href.length > MAX_URL) throw new Error('report too long: shorten what happened');
     return {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { applyStdioIssuesDefault, attest, issuesConfig, reportProblemHandler, STDIO_DEFAULT_ISSUES_URL } from '../src/tools/reportProblem.ts';
+import { applyStdioIssuesDefault, attest, identify, issuesConfig, reportProblemHandler, STDIO_DEFAULT_ISSUES_URL } from '../src/tools/reportProblem.ts';
 import { runWithCredentials, setApiEndpoint, clearApiEndpoint } from '../src/auth/session.ts';
 import { buildServer, version } from '../src/server.ts';
 
@@ -38,6 +38,21 @@ function serviceVerify (att: string, keys: Record<string, { secret: string, env:
   if (key.env != null && c.env !== key.env) throw new Error('att env contradicts the source key binding');
   if (now - c.iat > 48 * 3600 || c.iat - now > 300) return { reporter: 'anonymous', env: c.env };
   return { reporter: c.r, env: key.env ?? c.env };
+}
+
+/** hds-issues-service `verifyIdentity`'s signature and shape check (0.2.0): the claims of a signed username. */
+function serviceIdentity (idt: string, secret: string): { src: string, u: string, env: string, iat: number } {
+  const [enc, mac] = idt.split('.');
+  const expected = crypto.createHmac('sha256', secret).update(enc).digest('base64url');
+  if (mac !== expected) throw new Error('idt signature does not verify');
+  const c = JSON.parse(Buffer.from(enc, 'base64url').toString('utf8'));
+  if ('r' in c || typeof c.u !== 'string' || !/^[a-z0-9][a-z0-9-]{1,48}[a-z0-9]$/.test(c.u)) throw new Error('idt claims are malformed');
+  return c;
+}
+
+/** `access-info` as the core answers it for the connected account. */
+function mockAccessInfo (t: { mock: { method: (o: object, m: string, f: () => unknown) => unknown } }, body: unknown, status = 200): void {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(body), { status }));
 }
 
 function withEnv (t: { after: (fn: () => void) => void }, vars: Record<string, string>): void {
@@ -78,6 +93,7 @@ test('review link: the draft in the format the review page decodes, scrubbed, no
 
 test('review link: attested when connected and keyed, verified by the intake\'s own check; claims carry no identifier', async (t) => {
   withEnv(t, { HDS_MCP_ISSUES_URL: 'https://issues.example.test', HDS_MCP_ISSUES_KEY: KEY, HDS_MCP_ISSUES_KEY_ID: 'hds-mcp-us1' });
+  mockAccessInfo(t, { type: 'app', user: { username: 'alice' } });
   const now = Math.floor(Date.now() / 1000);
   const { draft } = linkOf(await runWithCredentials(PROD, () => reportProblemHandler(INPUT)));
   assert.equal(draft.env, 'prod');
@@ -93,13 +109,41 @@ test('review link: attested when connected and keyed, verified by the intake\'s 
   assert.equal(serviceVerify(attest(KEY, 'hds-mcp-us1', 'prod', (now - 49 * 3600) * 1000), { 'hds-mcp-us1': { secret: KEY, env: 'prod' } }, now).reporter, 'anonymous');
 });
 
-test('review link: anonymous (no att) when nobody is connected, over HTTP and over stdio', async (t) => {
+test('review link: the username is signed (idt) from access-info, beside an att that still names nobody', async (t) => {
+  withEnv(t, { HDS_MCP_ISSUES_URL: 'https://issues.example.test', HDS_MCP_ISSUES_KEY: KEY, HDS_MCP_ISSUES_KEY_ID: 'hds-mcp-demo' });
+  mockAccessInfo(t, { type: 'app', user: { username: 'testuser56' } });
+  const { draft } = linkOf(await runWithCredentials(DEMO, () => reportProblemHandler(INPUT)));
+  const claims = serviceIdentity(draft.idt, KEY);
+  assert.deepEqual(Object.keys(claims).sort(), ['env', 'iat', 'src', 'u']);
+  assert.equal(claims.u, 'testuser56');
+  assert.equal(claims.src, 'hds-mcp-demo');
+  assert.equal(claims.env, 'demo');
+  assert.ok(!Buffer.from(draft.att.split('.')[0], 'base64url').toString('utf8').includes('testuser56'), 'att names nobody');
+  assert.throws(() => serviceIdentity(draft.idt, 'another-key-of-16-chars'), /does not verify/);
+  assert.throws(() => serviceIdentity(draft.att, KEY), /malformed/, 'an att is not an idt');
+  assert.match(identify(KEY, 'hds-mcp-demo', 'demo', 'bob'), /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+});
+
+test('review link: no idt when the core does not answer, or answers no valid username (att unchanged)', async (t) => {
+  withEnv(t, { HDS_MCP_ISSUES_URL: 'https://issues.example.test', HDS_MCP_ISSUES_KEY: KEY, HDS_MCP_ISSUES_KEY_ID: 'hds-mcp-demo' });
+  for (const [body, status] of [[{ error: { id: 'invalid-access-token' } }, 401], [{ user: {} }, 200], [{ user: { username: 'Not_A_Name' } }, 200]] as const) {
+    t.mock.restoreAll();
+    mockAccessInfo(t, body, status);
+    const { draft } = linkOf(await runWithCredentials(DEMO, () => reportProblemHandler(INPUT)));
+    assert.equal(typeof draft.att, 'string', JSON.stringify(body));
+    assert.equal(draft.idt, undefined, JSON.stringify(body));
+  }
+});
+
+test('review link: anonymous (no att, no idt) when nobody is connected, over HTTP and over stdio', async (t) => {
   withEnv(t, { HDS_MCP_ISSUES_URL: 'https://issues.example.test', HDS_MCP_ISSUES_KEY: KEY, HDS_MCP_ISSUES_KEY_ID: 'hds-mcp-demo' });
   const http = linkOf(await runWithCredentials(NOT_CONNECTED, () => reportProblemHandler(INPUT))).draft;
   assert.equal(http.att, undefined);
+  assert.equal(http.idt, undefined);
   assert.equal(http.env, 'demo');
   const stdio = linkOf(await reportProblemHandler(INPUT)).draft;
   assert.equal(stdio.att, undefined);
+  assert.equal(stdio.idt, undefined);
   assert.equal(stdio.env, 'demo');
 });
 
