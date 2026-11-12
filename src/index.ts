@@ -2,8 +2,10 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { buildServer } from './server.ts';
 import { safeLog } from './lib/scrubber.ts';
+import { applyStdioIssuesDefault } from './tools/reportProblem.ts';
 
 async function main (): Promise<void> {
+  applyStdioIssuesDefault();
   const server = buildServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
