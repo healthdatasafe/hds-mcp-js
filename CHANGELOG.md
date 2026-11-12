@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Changed
+- `report_problem` signs the connected account's username (as `access-info` states it) with the source key, as `idt`
+  beside `att` in the review draft (hds-issues-service 0.2.0). The review page offers "add my HDS username" read-only
+  from it and sends it only when ticked; `att` still names nobody. No idt when the core does not answer, or without a
+  key or a session.
 - A local (stdio) MCP sends `report_problem` drafts to the HDS issue intake `https://issues.hds.ngo` when
   `HDS_MCP_ISSUES_URL` is unset (it has no source key, so reports arrive as anonymous). An explicit value wins; an
   empty string keeps the GitHub link. The HTTP server is unchanged: it still needs the variable set.
