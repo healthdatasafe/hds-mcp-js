@@ -170,7 +170,9 @@ next session starts back in the safe state.
   your account name and per-user addresses, link parameters and long ids
   from what the agent wrote. Read the report before you send it: a name or
   a value written in plain words is not caught.
-  - With `HDS_MCP_ISSUES_URL` set (the HDS issues service), the link opens
+  - With `HDS_MCP_ISSUES_URL` set (the HDS issues service; a local stdio
+    MCP uses `https://issues.hds.ngo` unless you set it, and set to an
+    empty string it keeps the GitHub link), the link opens
     an HDS page holding the draft in the part of the link after `#`, which
     your browser never sends anywhere. You edit it there and send it to the
     HDS team (not public, no account needed); the service removes tokens

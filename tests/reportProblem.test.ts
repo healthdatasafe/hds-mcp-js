@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { attest, issuesConfig, reportProblemHandler } from '../src/tools/reportProblem.ts';
+import { applyStdioIssuesDefault, attest, issuesConfig, reportProblemHandler, STDIO_DEFAULT_ISSUES_URL } from '../src/tools/reportProblem.ts';
 import { runWithCredentials, setApiEndpoint, clearApiEndpoint } from '../src/auth/session.ts';
 import { buildServer, version } from '../src/server.ts';
 
@@ -116,6 +116,21 @@ test('issuesConfig: unset is the GitHub link; bad values refuse to start', () =>
   assert.throws(() => issuesConfig({ HDS_MCP_ISSUES_URL: 'https://u:p@issues.example.test' }), /no credentials/);
   assert.throws(() => issuesConfig({ HDS_MCP_ISSUES_URL: 'https://issues.example.test', HDS_MCP_ISSUES_KEY: KEY }), /go together/);
   assert.throws(() => issuesConfig({ HDS_MCP_ISSUES_URL: 'https://issues.example.test', HDS_MCP_ISSUES_KEY: 'short', HDS_MCP_ISSUES_KEY_ID: 'x' }), /at least 16/);
+});
+
+test('stdio default: unset gets the HDS intake (anonymous); an explicit value or empty string is kept', () => {
+  const unset: NodeJS.ProcessEnv = {};
+  applyStdioIssuesDefault(unset);
+  assert.equal(unset.HDS_MCP_ISSUES_URL, STDIO_DEFAULT_ISSUES_URL);
+  const cfg = issuesConfig(unset)!;
+  assert.equal(cfg.base.href, 'https://issues.hds.ngo/');
+  assert.equal(cfg.key, null);
+  const explicit: NodeJS.ProcessEnv = { HDS_MCP_ISSUES_URL: 'http://127.0.0.1:6060' };
+  applyStdioIssuesDefault(explicit);
+  assert.equal(explicit.HDS_MCP_ISSUES_URL, 'http://127.0.0.1:6060');
+  const optOut: NodeJS.ProcessEnv = { HDS_MCP_ISSUES_URL: '' };
+  applyStdioIssuesDefault(optOut);
+  assert.equal(issuesConfig(optOut), null);
 });
 
 test('the draft names the last failed tool of the session and the core error id; never report_problem itself', async (t) => {

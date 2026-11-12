@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- A local (stdio) MCP sends `report_problem` drafts to the HDS issue intake `https://issues.hds.ngo` when
+  `HDS_MCP_ISSUES_URL` is unset (it has no source key, so reports arrive as anonymous). An explicit value wins; an
+  empty string keeps the GitHub link. The HTTP server is unchanged: it still needs the variable set.
+
 ## [0.22.0] - 2026-11-11
 
 ### Changed

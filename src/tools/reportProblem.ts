@@ -26,6 +26,17 @@ type Input = { asked: string; happened: string; client?: string; step?: string }
 /** The last tool call that failed in this MCP session (a tool name from the closed set, a core error id slug). */
 export interface LastFailure { tool: string; errorId: string | null; at: number }
 
+/** The HDS issue intake a local (stdio) MCP uses when `HDS_MCP_ISSUES_URL` is unset. */
+export const STDIO_DEFAULT_ISSUES_URL = 'https://issues.hds.ngo';
+
+/**
+ * stdio only: point report_problem at the HDS intake unless `HDS_MCP_ISSUES_URL` is set. Set to an empty string, it
+ * keeps the GitHub link. A local MCP carries no source key, so its reports arrive as anonymous.
+ */
+export function applyStdioIssuesDefault (env: NodeJS.ProcessEnv = process.env): void {
+  if (env.HDS_MCP_ISSUES_URL === undefined) env.HDS_MCP_ISSUES_URL = STDIO_DEFAULT_ISSUES_URL;
+}
+
 /**
  * The issue intake (hds-issues-service) this MCP sends drafts to, from the environment; null without
  * `HDS_MCP_ISSUES_URL` (report_problem then gives the GitHub link). `key` / `keyId` sign the attestation; a key with no
