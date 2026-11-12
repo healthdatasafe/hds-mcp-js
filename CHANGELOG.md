@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-11-12
+
 ### Changed
 - `report_problem` signs the connected account's username (as `access-info` states it) with the source key, as `idt`
   beside `att` in the review draft (hds-issues-service 0.2.0). The review page offers "add my HDS username" read-only
