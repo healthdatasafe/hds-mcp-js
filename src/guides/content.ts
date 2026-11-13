@@ -126,6 +126,10 @@ Confirm every item below with search_items / get_item before writing.
   known: an unknown end is no duration, never null). participants[].eventId and
   serviceProvider.eventId point at the providers.
 - Diagnoses: condition-coded (time = onset, or the diagnosis date when that is all it says).
+  content.status only when the letter states it: active, recurrence, relapse, inactive,
+  remission or resolved; none stated, no status. A duration only when the letter dates the end
+  (time + duration = when it stopped) and then status inactive, remission or resolved; no known
+  end: no duration key at all, never 0 or null (an open condition is said by its status).
   Findings: finding-coded. Procedures: procedure-coded, else procedure-basic (name as printed).
   Treatments over time: treatment-coded, else treatment-basic. Each cites the visit with
   clientData.related.<visitId>: true.
@@ -218,6 +222,9 @@ through the chat (site-agents#36).
   Condition onsetDateTime, else onsetPeriod.start, else recordedDate. A full dateTime is
   hdsTimePrecision "minute"; YYYY-MM-DD, YYYY-MM, YYYY give "day", "month", "year" at 12:00 UTC.
   A record with no readable date is not imported.
+  Condition clinicalStatus (its condition-clinical code) is content.status. abatementDateTime
+  gives the duration (abatement minus time, in seconds), only with status inactive, remission or
+  resolved; no abatement: no duration key, never 0 or null.
 - C-CDA: use the LOINC, SNOMED-CT or ICD-10 codes it carries with search_items and
   search_dataset; same value, unit and date rules.
 - sourceKey from the record's own identity, the same on every run. FHIR:
