@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.23.1] - 2026-11-13
+
 ### Changed
 - Import guides (`letter`, `app-export`): a condition's `content.status` (the six `condition-clinical` codes, only
   when the source states one) and the duration rule of data-model 4.1.0 CONDITION.md: a duration only for a dated
