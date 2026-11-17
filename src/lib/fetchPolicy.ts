@@ -1,5 +1,8 @@
-/** Per-call budgets: a core write of 500 events or the ~1 MB data-model pack takes longer than a service-info read. */
-export const TIMEOUT_MS = { api: 60_000, pack: 30_000, info: 10_000 } as const;
+/**
+ * Per-call budgets: a core write of 500 events or the ~1 MB data-model pack takes longer than a service-info read; an
+ * attachment of up to 20 MB (attach_file) longer still, on a home uplink.
+ */
+export const TIMEOUT_MS = { api: 60_000, upload: 180_000, pack: 30_000, info: 10_000 } as const;
 
 /**
  * Every outbound call of the tools: a timeout, so a slow or hostile upstream cannot hang a tool call, and redirects

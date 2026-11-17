@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-17
+
+Verified live on demo (throwaway account, rc.85): a `create_event` then `attach_file` round trip reads back the same
+bytes by sha256. A second attach and a relative path are refused, and the full path appears in no result.
+
+### Added
+- `attach_file({ eventId, path })`, local (stdio) MCP only (site-agents#36, perki 2026-11-17): reads one file the
+  user named by its absolute path, once, into memory, and uploads it as the attachment of a `file/xds-v1` document
+  event (`POST /events/{id}`, multipart, one `file` part). The event must be readable, of type `file/xds-v1`, not
+  trashed and without an attachment. The file must be a regular file (no symlink, folder or device), at most 20 MB,
+  and a PDF, JPEG or PNG by its first bytes, with an extension that agrees. Only the base name is sent to the core or
+  shown in errors, never the path. Same production-write gate as `create_event`. The hosted MCP (OAuth and raw mode)
+  does not register it and refuses it inside a request. The one exception to "no filesystem I/O" (AGENTS.md).
+
+### Changed
+- On stdio, `create_event` and `update_event` accept `file/xds-v1` content (checked against its schema), so the
+  document event can exist before `attach_file`; `create_event` says the file is still to add. `import_batch` still
+  refuses attachment types, now pointing at `create_event` + `attach_file`. The hosted MCP is unchanged.
+- `get_event_type` on an attachment type: on stdio, create the event, then `attach_file`; hosted, not writable
+  through this MCP. Import guides: original documents can be stored by the local MCP (overview 2b), not by the remote
+  connector.
+
 ## [0.23.1] - 2026-11-13
 
 ### Changed

@@ -22,6 +22,18 @@ ship filesystem I/O, OCR, vision, Excel parsing, or any composition
 beyond mapping MCP tool calls to Pryv API calls. The agent's client is
 expected to provide everything else.
 
+**One exception: `attach_file`** (perki 2026-11-17,
+[site-agents#36](https://github.com/healthdatasafe/site-agents/issues/36)). A medical document
+(`file/xds-v1`, data-model DOCUMENTS.md) is a Pryv attachment, which no other tool can send, and a
+model cannot pass a 20 MB PDF through a tool argument. So the stdio MCP reads **one file the user
+named by its absolute path**, once, into memory, and uploads it to a document event that has no file
+yet. Nothing else is read, and it is never offered by the hosted MCP (HTTP, OAuth or raw mode): a
+server must not read its own disk on a caller's behalf. The checks live in
+[`tools/attachFile.ts`](src/tools/attachFile.ts): an absolute path to a regular file (`lstat` and an
+`O_NOFOLLOW` open: no symlink, folder or device), at most 20 MB (the core takes 50 MB, demo nginx 55m),
+PDF / JPEG / PNG from the magic bytes with an extension that agrees, and only the base name sent or
+echoed, never the path.
+
 Design choices (locked during the v1 scoping; tracked in the project's
 planning issues — see [healthdatasafe/_macro#23](https://github.com/healthdatasafe/_macro/issues/23)):
 
@@ -36,8 +48,8 @@ planning issues — see [healthdatasafe/_macro#23](https://github.com/healthdata
   runs through [`lib/scrubber.ts`](src/lib/scrubber.ts). Unit-tested.
   Hard rule — do not add a `console.log` or `process.stderr.write`
   that bypasses it.
-- **Production-write gate (session opt-in since v0.1.0).** `create_event`
-  and `import_batch` refuse on prod hosts unless the session was opened
+- **Production-write gate (session opt-in since v0.1.0).** `create_event`,
+  `import_batch` and every other write tool (`attach_file` included) refuse on prod hosts unless the session was opened
   with `connect({ host: "prod", enableWrites: true })` — which the agent
   may only pass when the user explicitly asked to write to production.
   `HDS_MCP_PROD_WRITES_ENABLED=true` in the MCP environment remains as a
@@ -72,6 +84,7 @@ All fourteen tools are tagged `essential` and exposed by default. The
 | **`search_dataset`**  | Search one dataset (condition, finding, medication, procedure, treatment) | Endpoint resolved like hds-lib: `datasets://<kind>` joined to `assets.datasets` of the connected platform's service-info, demo when not connected ([`dataModel/datasources.ts`](src/dataModel/datasources.ts)). The search text reaches the HDS datasets service; the description tells the agent to say so. |
 | **`create_event`**    | Create one event                                                        | **Gated** on prod hosts via `assertWriteAllowed`. Description primes the agent to call `search_items` → `get_item` first. Takes optional `description` and `clientData`. Type + content validated against the pack before the call (`validateEvent`); refused with nothing written.                                                                                                                                                                                                          |
 | **`import_batch`**    | Create 1–500 events in one call                                         | Same gate. Same itemDef-first priming. Same fields and validation; one invalid event refuses the whole batch. Returns the created ids in input order (`null` where the core refused one).                                                                                                                                                                                                                                                                                             |
+| **`attach_file`**     | Upload one local file as the attachment of a `file/xds-v1` document event | **stdio only** (not registered when `buildServer({ http: true })`; refused inside an HTTP request too). Same gate. The event is read first (`events.getOne`): it must be `file/xds-v1`, not trashed, with no attachment; then `POST /events/{id}` multipart, one `file` part named with the base name. PDF / JPEG / PNG by magic bytes, extension agreeing, at most 20 MB. On stdio, `create_event` / `update_event` accept `file/xds-v1` content (checked against its schema) so the event can exist first; `import_batch` still refuses attachment types. |
 
 ### Tool descriptions are part of the surface
 
@@ -129,7 +142,11 @@ If no item matches, surface that to the user — the MCP does not invent.
 | `create_event`: type or content invalid       | ``Event refused, nothing written: <problems>``                                           |
 | `import_batch`: any event invalid             | ``Batch refused, nothing written: N problem(s).`` then one ``- [index] <problem>`` line each (first 20) |
 | Problem: type not in the data model           | ``Unknown event type "X": not in the HDS data model (data-model <version>). Use the eventType from get_item.`` |
-| Problem: type needs an attachment             | ``Event type "X" needs an attachment, which this MCP cannot upload yet.``                |
+| Problem: type needs an attachment             | ``Event type "X" needs an attachment, which this MCP cannot upload yet.`` (hosted MCP)   |
+| Same, `import_batch` on stdio                 | ``Event type "X" needs an attachment: create it with create_event, then add its file with attach_file.`` |
+| `attach_file`: path, file or type refused     | ``File refused, nothing written: <why>``, naming the base name only (relative path, symlink, folder, not a regular file, not found, larger than 20 MB, not a PDF/JPEG/PNG, extension disagreeing) |
+| `attach_file`: event refused                  | ``Attachment refused, nothing written: event <id> <is of type "X" / already has an attachment / is in the trash>`` |
+| `attach_file` inside an HTTP request          | ``attach_file is only available on the local (stdio) HDS MCP: the hosted connector reads no file on your computer.`` |
 | Problem: content does not match the schema    | ``content<path> <message> (<params>)``, e.g. ``content must be number ({"type":"number"})`` |
 | `get_event_type`: unknown type                | ``No HDS event type "X" in data-model <version>. Use search_items to find the item, then its eventType.`` |
 | `list_model_streams`: unknown parent          | ``No stream "X" in the HDS data model (data-model <version>).``                          |
@@ -238,7 +255,8 @@ registry client with `--can-introspect`), `HDS_MCP_SERVICE_INFO` (`demo` default
   no scope (Claude Code). Demo: `offline_access` + `hds/stream/<root>.read` on the 17 connector-row roots (perki,
   read-only default).
 - Not offered over OAuth: `connect` (OAuth signs in) and `ensure_streams` (no grant carries `manage`). Raw mode
-  (below) offers both: its own `connect`, and `ensure_streams` under its master access.
+  (below) offers both: its own `connect`, and `ensure_streams` under its master access. `attach_file` is offered by
+  neither: it reads a local file, stdio only.
 - **Step-up** ([`src/http/stepUp.ts`](src/http/stepUp.ts)): before the transport, a `create_event` / `import_batch`
   whose target root the token cannot write gets 403 `insufficient_scope` with `scope` = current scopes plus
   `hds/stream/<root>.contribute` (plan 118 D-J3). Streams outside the model are left to the core.
@@ -298,6 +316,7 @@ tests/
   phase2.test.ts       # events.get params (clientData filters, paging), delete order, model paths
   session.test.ts      # per-request credential isolation
   http.test.ts         # HTTP transport: 401 + metadata, origin check, per-user token isolation end to end
+  attachFile.test.ts   # attach_file: multipart shape, file / event refusals, no path echoed, stdio only
 ```
 
 `src/httpMain.ts` (HTTP entry) and `src/http/` (`app.ts`: express app; `introspection.ts`: token verifier) hold the

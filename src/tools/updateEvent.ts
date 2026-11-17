@@ -20,7 +20,8 @@ export const updateEventInput = {
 };
 
 export async function updateEventHandler (
-  { id, update }: { id: string; update: Record<string, unknown> & { content?: unknown; type?: string } }
+  { id, update }: { id: string; update: Record<string, unknown> & { content?: unknown; type?: string } },
+  { attachFile = false }: { attachFile?: boolean } = {}
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   if (Object.keys(update).length === 0) throw new Error('Nothing to update.');
   if ('content' in update || 'type' in update) {
@@ -28,7 +29,7 @@ export async function updateEventHandler (
     if (cur?.error) throw new Error(`Pryv events.getOne failed: ${cur.error.message ?? cur.error.id}`);
     const type = update.type ?? cur.event.type;
     const content = 'content' in update ? update.content : cur.event.content;
-    const problems = validateEvent(await loadPack(), type, content);
+    const problems = validateEvent(await loadPack(), type, content, { attachFile });
     if (problems.length > 0) throw new Error(`Update refused, nothing written: ${problems.join('; ')}`);
   }
   const [res] = await apiBatch([{ method: 'events.update', params: { id, update } }]);

@@ -23,17 +23,25 @@ export function contentSchema (pack: DataModelPack, type: string): Record<string
   return pack.eventTypes?.types?.[type];
 }
 
+export interface ValidateOptions {
+  /** The local (stdio) MCP, whose attach_file adds the file of an attachment type after the event is written. */
+  attachFile?: boolean;
+  /** import_batch: an attachment type is written one event at a time (create_event, then attach_file). */
+  batch?: boolean;
+}
+
 /**
  * Validates one event's type and content against the pack.
  * Returns the problems found, empty when the event can be written.
  */
-export function validateEvent (pack: DataModelPack, type: string, content: unknown): string[] {
+export function validateEvent (pack: DataModelPack, type: string, content: unknown, { attachFile = false, batch = false }: ValidateOptions = {}): string[] {
   const schema = contentSchema(pack, type);
   if (!schema) {
     return [`Unknown event type "${type}": not in the HDS data model (${packLabel(pack)}). Use the eventType from get_item.`];
   }
   if (schema.attachmentRequired === true) {
-    return [`Event type "${type}" needs an attachment, which this MCP cannot upload yet.`];
+    if (!attachFile) return [`Event type "${type}" needs an attachment, which this MCP cannot upload yet.`];
+    if (batch) return [`Event type "${type}" needs an attachment: create it with create_event, then add its file with attach_file.`];
   }
   const validate = compiled.get(type) ?? ajv.compile(schema);
   compiled.set(type, validate);
