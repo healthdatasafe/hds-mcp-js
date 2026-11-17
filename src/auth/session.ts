@@ -20,6 +20,11 @@ export function getGrantedScopes (): string[] | null {
   return requestCredentials.getStore()?.scopes ?? null;
 }
 
+/** True inside an HTTP request (OAuth or raw mode), false on the stdio MCP. */
+export function inRequestContext (): boolean {
+  return requestCredentials.getStore() != null;
+}
+
 /** Runs `fn` with these credentials for every tool call it makes (HTTP transport). */
 export function runWithCredentials<T> (creds: RequestCredentials, fn: () => T): T {
   return requestCredentials.run(creds, fn);

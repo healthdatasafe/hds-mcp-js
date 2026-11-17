@@ -31,8 +31,17 @@ values, never their real records; then the real import on production.
 ## 2. Inventory
 Ask what they have (lab reports, letters, photos of documents, spreadsheets, app exports) and
 which to import. One source type at a time. They attach files to the chat and you read them:
-this MCP cannot read their files. Original files cannot be stored yet (file/xds-v1 needs an
-attachment this MCP cannot upload): say so; store the values you extract, they keep the files.
+this MCP cannot read their files. Original files: only the local MCP can store them (2b); the
+remote connector cannot: say so, store the values you extract, they keep the files.
+
+## 2b. Original documents (local MCP only)
+A PDF, JPEG or PNG of up to 20 MB, one file per document, only those the patient asks to keep:
+- ensure_streams({ items: ["document"] }); then create_event on stream "documents", type
+  file/xds-v1, content from get_event_type (class, type, title, language), with a sourceKey.
+- Ask the patient for the file's full path on their computer, then
+  attach_file({ eventId, path }). Only the file name is sent; the file is not shown to you.
+- Read it back with get_events. A document event without its file shows as a failed import:
+  if attach_file is refused, fix it and attach again, or delete the event.
 
 ## 3. Access
 - Local MCP: connect({ roots, importName }). roots: only the root streams the import writes
@@ -109,8 +118,8 @@ https://github.com/healthdatasafe/data-model/blob/main/documentation/BLOOD-CHEMI
   Date only: 12:00 UTC that day, clientData.hdsTimePrecision "day".
 - sourceKey per result, from the sample date and the analyte, e.g.
   "healthfiles:lab:2024-03-12-ferritin".
-- The report itself cannot be stored yet (file/xds-v1 needs an attachment): say so; the patient
-  keeps it.
+- The report itself: the local MCP stores it as a document (overview 2b), if the patient asks;
+  the remote connector cannot store it: say so, the patient keeps it.
 `,
 
   letter: `# Letters and reports (discharge letters, consultation reports)
@@ -155,7 +164,8 @@ in content is also set as clientData.related.<eventId>: true, in the same write.
 Partial dates ("03.1999"): 1999-03-01 12:00 UTC, hdsTimePrecision "month", hdsTimeText "03.1999".
 sourceKey per record, e.g. "<tool>:letter:<letter date>-<what>"; no names or ID numbers in it.
 Names, reasons and notes are free text that every reader of the stream sees.
-The letter itself (file/xds-v1) cannot be stored yet: say so; the patient keeps it.
+The letter itself: the local MCP stores it as a document (overview 2b) if the patient asks; the
+remote connector cannot store it: say so, the patient keeps it.
 Docs: ENCOUNTER.md, CONDITION.md, MEDICATION.md, PARTIAL-DATES.md in
 https://github.com/healthdatasafe/data-model/blob/main/documentation/
 `,
@@ -174,8 +184,8 @@ to your model provider (overview, privacy).
   reports, spreadsheet for a photographed table. Same item lookup, same clientData rules.
 - Several photos of one document are one document: the sourceKey comes from the record (date,
   analyte), never from the photo, so a page sent twice does not duplicate values.
-- The photo itself cannot be stored yet (file/xds-v1 needs an attachment this MCP cannot
-  upload): say so; the patient keeps it.
+- The photo itself: the local MCP stores a JPEG or PNG as a document (overview 2b) if the patient
+  asks; the remote connector cannot store it: say so, the patient keeps it.
 `,
 
   spreadsheet: `# Spreadsheets (CSV, XLSX)

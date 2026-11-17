@@ -19,6 +19,7 @@ import { getImportGuideInput, getImportGuideHandler } from './tools/getImportGui
 import { getConnectionInput, getConnectionHandler } from './tools/getConnection.ts';
 import { reportProblemInput, reportProblemHandler, type LastFailure } from './tools/reportProblem.ts';
 import { openAccountInput, openAccountHandler } from './tools/openAccount.ts';
+import { attachFileInput, attachFileHandler } from './tools/attachFile.ts';
 import { extendWriteHint } from './http/stepUp.ts';
 import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
@@ -28,7 +29,8 @@ import { UpstreamError } from './lib/fetchPolicy.ts';
 export const TOOL_NAMES = [
   'connect', 'list_streams', 'get_events', 'create_event', 'import_batch', 'ensure_streams', 'update_event',
   'delete_events', 'search_items', 'get_item', 'get_event_type', 'list_model_streams', 'list_datasources',
-  'search_dataset', 'get_connection', 'get_import_guide', 'report_missing_item', 'report_problem', 'open_account'
+  'search_dataset', 'get_connection', 'get_import_guide', 'report_missing_item', 'report_problem', 'open_account',
+  'attach_file'
 ] as const;
 type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -121,17 +123,29 @@ export function buildServer (
 
   server.tool(
     'create_event',
-    'Create a single event (data point) in the connected HDS account. Always call search_items first to find the canonical HDS item for the data type, then get_item to read its spec, and use that streamId + eventType. If no item matches, ask the user before inventing a type. The content is checked against the eventType content schema before writing; an unknown type or invalid content is refused and nothing is written. Optional description (human text every app shows) and clientData (data-model conventions such as sourceKey). Refuses on production until the production-write gate is opened.',
+    'Create a single event (data point) in the connected HDS account. Always call search_items first to find the canonical HDS item for the data type, then get_item to read its spec, and use that streamId + eventType. If no item matches, ask the user before inventing a type. The content is checked against the eventType content schema before writing; an unknown type or invalid content is refused and nothing is written. Optional description (human text every app shows) and clientData (data-model conventions such as sourceKey). ' +
+      (http ? '' : 'A medical document (item "document", file/xds-v1) is created without its file: add the file next with attach_file. ') +
+      'Refuses on production until the production-write gate is opened.',
     createEventInput,
-    wrap('create_event', createEventHandler)
+    wrap('create_event', (a: Parameters<typeof createEventHandler>[0]) => createEventHandler(a, { attachFile: !http }))
   );
 
   server.tool(
     'import_batch',
     'Import many events at once (1–500 per call). Always call search_items first to find the canonical HDS item for each data type, then get_item for its spec, and use those streamId + eventType values. If no item matches for some data, ask the user before inventing a type. Every event is checked against its eventType content schema first; if any fails, the whole batch is refused and nothing is written. Returns the created event ids in input order, so later events can reference earlier ones. Refuses on production until the production-write gate is opened.',
     importBatchInput,
-    wrap('import_batch', importBatchHandler)
+    wrap('import_batch', (a: Parameters<typeof importBatchHandler>[0]) => importBatchHandler(a, { attachFile: !http }))
   );
+
+  // The one filesystem read (perki 2026-11-17, site-agents#36): stdio only, so the hosted catalogue never offers it.
+  if (!http) {
+    server.tool(
+      'attach_file',
+      'Upload one local file the user named as the attachment of a medical document. Reads the file at that absolute path on this computer (local MCP only) and adds it to a file/xds-v1 event that exists and has no attachment yet: create that event first with create_event (item "document"; its content is checked as for any event), then call this with its id. PDF, JPEG or PNG only, recognised from the file\'s content (its extension must agree), up to 20 MB. Only the file name is sent, never the folder path, and the file\'s content is not returned to you. Use it only for a file the user asked to store. Refuses on production until the production-write gate is opened: open it only on the user\'s explicit ask.',
+      attachFileInput,
+      wrap('attach_file', attachFileHandler)
+    );
+  }
 
   // Not over OAuth: its grants never carry manage, so stream creation is always refused there. Raw mode holds manage.
   if (!oauth) {
@@ -147,7 +161,7 @@ export function buildServer (
     'update_event',
     'Change one event in place (content, time, description, clientData, …), e.g. when an import runs again and a record changed: find it by clientData.sourceKey with get_events. Content is checked against the event type first. clientData is replaced whole: keep sourceKey. Never update a trashed event: the user removed it. Refuses on production until the production-write gate is opened.',
     updateEventInput,
-    wrap('update_event', updateEventHandler)
+    wrap('update_event', (a: Parameters<typeof updateEventHandler>[0]) => updateEventHandler(a, { attachFile: !http }))
   );
 
   server.tool(
@@ -175,7 +189,7 @@ export function buildServer (
     'get_event_type',
     'Get one HDS event type: its content schema (what create_event / import_batch accept), the unit name for measurement types, whether it needs an attachment, and the items that use it. Reads the data model only; no account needed.',
     getEventTypeInput,
-    wrap('get_event_type', getEventTypeHandler)
+    wrap('get_event_type', (a: Parameters<typeof getEventTypeHandler>[0]) => getEventTypeHandler(a, { attachFile: !http }))
   );
 
   server.tool(

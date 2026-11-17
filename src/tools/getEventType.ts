@@ -10,7 +10,8 @@ export const getEventTypeInput = {
 };
 
 export async function getEventTypeHandler (
-  { type }: { type: string }
+  { type }: { type: string },
+  { attachFile = false }: { attachFile?: boolean } = {}
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const pack = await loadPack();
   const schema = contentSchema(pack, type);
@@ -24,7 +25,11 @@ export async function getEventTypeHandler (
   const head = [
     `**${type}** · ${packLabel(pack)}`,
     extra ? `Unit: ${en(extra.name)}${extra.symbol ? ` (${extra.symbol})` : ''}` : '',
-    schema.attachmentRequired === true ? 'Needs an attachment: not writable through this MCP yet.' : '',
+    schema.attachmentRequired === true
+      ? (attachFile
+          ? 'Needs an attachment: create the event with create_event (content checked against the schema below), then add its file with attach_file (PDF, JPEG or PNG, up to 20 MB).'
+          : 'Needs an attachment: not writable through this MCP (only the local HDS MCP uploads files, with attach_file).')
+      : '',
     `Items using it: ${items.length > 0 ? items.join(', ') : 'none (a generic type: prefer an item when one fits)'}`
   ].filter((l) => l !== '');
   return {

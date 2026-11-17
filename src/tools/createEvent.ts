@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { apiPost } from '../lib/apiCall.ts';
 import { loadPack } from '../dataModel/pack.ts';
-import { validateEvent } from '../dataModel/eventTypes.ts';
+import { contentSchema, validateEvent } from '../dataModel/eventTypes.ts';
 
 export const createEventInput = {
   streamIds: z.array(z.string()).min(1).describe(
@@ -46,9 +46,11 @@ export async function createEventHandler (
     tags?: string[];
     description?: string;
     clientData?: Record<string, unknown>;
-  }
+  },
+  { attachFile = false }: { attachFile?: boolean } = {}
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
-  const problems = validateEvent(await loadPack(), args.type, args.content);
+  const pack = await loadPack();
+  const problems = validateEvent(pack, args.type, args.content, { attachFile });
   if (problems.length > 0) {
     throw new Error(`Event refused, nothing written: ${problems.join('; ')}`);
   }
@@ -65,10 +67,12 @@ export async function createEventHandler (
 
   const res = await apiPost('/events', body);
   const event = (res as any).event ?? res;
+  const needsFile = contentSchema(pack, args.type)?.attachmentRequired === true;
   return {
     content: [{
       type: 'text',
-      text: `Created event ${(event as any).id ?? '(no id)'} of type ${args.type} in stream(s) ${args.streamIds.join(', ')}.`
+      text: `Created event ${(event as any).id ?? '(no id)'} of type ${args.type} in stream(s) ${args.streamIds.join(', ')}.` +
+        (needsFile ? ' It has no file yet: add it with attach_file.' : '')
     }, {
       type: 'text',
       text: '```json\n' + JSON.stringify(event, null, 2) + '\n```'

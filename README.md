@@ -105,7 +105,7 @@ That's it. The connection lasts until you quit Claude Desktop.
 
 ## What the tools do
 
-The MCP exposes nineteen tools to your agent. **You don't call them directly —**
+The MCP exposes twenty tools to your agent. **You don't call them directly —**
 you just ask your agent in plain language. The agent picks the right tool.
 
 | Tool | What it does | Plain-language prompt |
@@ -121,6 +121,7 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `search_dataset` | Find a coded entry (diagnosis, drug, treatment) to record | *"Find the code for endometriosis."* |
 | `create_event` | Write a single event into a stream | *"Log my weight as 72 kg right now."* |
 | `import_batch` | Write up to 500 events in one call | *"Import every row of this CSV as a temperature event."* |
+| `attach_file` | Store one PDF, JPEG or PNG from your computer (up to 20 MB) as a medical document; reads only the file you name, sends only its name, never its folder (this local MCP only) | *"Keep /Users/me/Documents/lab-2024-03.pdf as my March lab report."* |
 | `ensure_streams` | Create the data containers an item needs before writing | *(the agent does this itself before an import)* |
 | `update_event` | Fix one event in place | *"That weight should be 71.9, not 71.5."* |
 | `delete_events` | Remove events, or everything one import wrote; shows the list first | *"Remove everything the health-files import wrote."* |

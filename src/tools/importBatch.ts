@@ -24,12 +24,13 @@ export const importBatchInput = {
 };
 
 export async function importBatchHandler (
-  args: { events: z.infer<typeof eventSchema>[] }
+  args: { events: z.infer<typeof eventSchema>[] },
+  { attachFile = false }: { attachFile?: boolean } = {}
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const pack = await loadPack();
   const invalid: string[] = [];
   args.events.forEach((ev, i) => {
-    for (const p of validateEvent(pack, ev.type, ev.content)) invalid.push(`  - [${i}] ${p}`);
+    for (const p of validateEvent(pack, ev.type, ev.content, { attachFile, batch: true })) invalid.push(`  - [${i}] ${p}`);
   });
   if (invalid.length > 0) {
     throw new Error(

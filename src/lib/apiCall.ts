@@ -59,6 +59,28 @@ export async function apiPost (path: string, body: unknown): Promise<any> {
   return respBody;
 }
 
+/**
+ * A multipart/form-data POST (Pryv attachment upload: `POST /events/{id}` with the file parts). Same write gate and
+ * error shape as apiPost; fetch sets the content type and its boundary from the FormData.
+ */
+export async function apiPostMultipart (path: string, form: FormData): Promise<any> {
+  const apiEndpoint = getApiEndpoint();
+  assertWriteAllowed(apiEndpoint, getProdWritesEnabled());
+  const { token, baseUrl } = parseApiEndpoint(apiEndpoint);
+  const url = new URL(stripLeadingSlash(path), baseUrl);
+  const res = await policyFetch(url, {
+    method: 'POST',
+    headers: { Authorization: token },
+    body: form
+  }, TIMEOUT_MS.upload);
+  const respBody = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = (respBody as any)?.error?.message ?? `HTTP ${res.status}`;
+    throw new UpstreamError(`Pryv POST ${path} failed: ${msg}`, res.status, (respBody as any)?.error?.id);
+  }
+  return respBody;
+}
+
 export async function apiBatch (
   calls: Array<{ method: string; params: any }>
 ): Promise<any[]> {
