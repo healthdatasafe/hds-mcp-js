@@ -20,6 +20,11 @@ Reference: https://agents.datasafe.dev/llms-full.txt (§3 items, §5f imports, �
   free text, provider names and the import references (sourceKey, hdsTimeText).
 - A provider that does not train on their data, or a local model, is the safer choice.
 - They choose what gets imported and can stop at any point.
+- Codes are looked up with search_items (local MCP: on this computer; remote connector: on the
+  HDS server) and search_dataset (the HDS datasets service). Never search a test, diagnosis or
+  drug name from their records on the web or on a terminology site or server (tx.fhir.org,
+  loinc.org, a SNOMED browser): that sends it away. A printed code may be checked there by the
+  code alone; it still names the test. Data-model TERMINOLOGY.md.
 Say it again before the first read of a production (real) account.
 
 ## 1b. Demo or production: say which, and suggest a trial on demo
@@ -121,7 +126,8 @@ https://github.com/healthdatasafe/data-model/blob/main/documentation/BLOOD-CHEMI
   code }] }, value, unit (UCUM code: umol/L, 10*9/L, {copies}/mL), unitText as printed,
   comparator, valueText (negative, 1:160), notes. Range and flag as above, limits in unit.
   Never for an analyte an item owns (search its LOINC code first). Only a LOINC code the report
-  prints or that you verified, never a guessed one. A result you cannot code: keep it aside and
+  prints or that you verified, never a guessed one. To check a code, query a terminology
+  server with the code, never with the test name. A result you cannot code: keep it aside and
   tell the patient (missing-item).
 - Time: when the sample was taken (its date, and time of day when printed), not the report date.
   Date only: 12:00 UTC that day, clientData.hdsTimePrecision "day".
