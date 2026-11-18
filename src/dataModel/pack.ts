@@ -27,6 +27,8 @@ export interface DataModelPack {
   eventTypes?: any;
   datasources?: any;
   conversions?: any;
+  /** data-model 4.17.0: kind → class / type Codings of a file/xds-v1 document */
+  documentKinds?: any;
 }
 
 let cached: DataModelPack | null = null;
