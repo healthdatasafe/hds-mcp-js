@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-11-18
+
+### Changed
+- Import guide, codes only (site-agents#36 A8, data-model TERMINOLOGY.md). The overview's privacy section now
+  names the two lookups that run through HDS: `search_items` (on this computer for the local MCP, on the HDS server
+  for the remote connector) and `search_dataset`. It also forbids searching a test, diagnosis or drug name from the
+  records on the web or on a terminology server; a code may be checked there by the code alone. The lab-report
+  guide's "a LOINC code you verified" now says how: by the code, never by the test name. Guide text only, no tool
+  change.
+
 ## [0.25.0] - 2026-11-18
 
 ### Added
