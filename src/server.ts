@@ -10,6 +10,7 @@ import { getItemInput, getItemHandler } from './tools/getItem.ts';
 import { getEventTypeInput, getEventTypeHandler } from './tools/getEventType.ts';
 import { listModelStreamsInput, listModelStreamsHandler } from './tools/listModelStreams.ts';
 import { listDatasourcesInput, listDatasourcesHandler } from './tools/listDatasources.ts';
+import { listDocumentKindsInput, listDocumentKindsHandler } from './tools/listDocumentKinds.ts';
 import { searchDatasetInput, searchDatasetHandler } from './tools/searchDataset.ts';
 import { ensureStreamsInput, ensureStreamsHandler } from './tools/ensureStreams.ts';
 import { updateEventInput, updateEventHandler } from './tools/updateEvent.ts';
@@ -30,7 +31,7 @@ export const TOOL_NAMES = [
   'connect', 'list_streams', 'get_events', 'create_event', 'import_batch', 'ensure_streams', 'update_event',
   'delete_events', 'search_items', 'get_item', 'get_event_type', 'list_model_streams', 'list_datasources',
   'search_dataset', 'get_connection', 'get_import_guide', 'report_missing_item', 'report_problem', 'open_account',
-  'attach_file'
+  'attach_file', 'list_document_kinds'
 ] as const;
 type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -116,7 +117,7 @@ export function buildServer (
 
   server.tool(
     'get_events',
-    'Get events (data points) from the connected HDS account, optionally filtered by stream, type, time range, clientData.sourceKey prefix (everything one import wrote) or the event they cite (relatedTo). state: \'all\' includes trashed events, which a re-run must see and leave trashed. Pages with limit + skip.',
+    'Get events (data points) from the connected HDS account, optionally filtered by stream, type, time range, clientData.sourceKey prefix (everything one import wrote), the event they cite (relatedTo) or a document\'s own identifier (documentUniqueId: is this document already held?). state: \'all\' includes trashed events, which a re-run must see and leave trashed. Pages with limit + skip.',
     getEventsInput,
     wrap('get_events', getEventsHandler)
   );
@@ -204,6 +205,13 @@ export function buildServer (
     'List the HDS datasets (curated, coded lists: conditions, findings, medications, procedures, treatments) and the items that take a value from each. Use search_dataset to look up an entry. No account needed.',
     listDatasourcesInput,
     wrap('list_datasources', listDatasourcesHandler)
+  );
+
+  server.tool(
+    'list_document_kinds',
+    'List the kinds of medical document (lab report, discharge summary, referral letter, …) from the Swiss EPR value sets, each with when to pick it and which printed date is its event time. With a key, returns that kind\'s class and type Codings to copy into a file/xds-v1 document\'s content. No account needed.',
+    listDocumentKindsInput,
+    wrap('list_document_kinds', listDocumentKindsHandler)
   );
 
   server.tool(

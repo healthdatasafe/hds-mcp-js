@@ -38,6 +38,15 @@ remote connector cannot: say so, store the values you extract, they keep the fil
 A PDF, JPEG or PNG of up to 20 MB, one file per document, only those the patient asks to keep:
 - ensure_streams({ items: ["document"] }); then create_event on stream "documents", type
   file/xds-v1, content from get_event_type (class, type, title, language), with a sourceKey.
+  class and type: pick the kind with list_document_kinds, then copy its Codings from
+  list_document_kinds({ key }) unchanged; never make up a code. Event time per the kind's timeBasis:
+  the date of the care reported, or the date it was written; never a fax, scan or upload date.
+- A document with its own identifier (an XDS uniqueId from a record export, a FHIR
+  masterIdentifier): first get_events({ documentUniqueId, state: "all" }). Found: it is already held;
+  fill only what is missing, never write it twice. Not found: create it with content.uniqueId and
+  clientData.hdsDocumentUniqueId = "<system>|<value>". An OID or a UUID is spelled system
+  "urn:ietf:rfc:3986", value "urn:oid:<oid>" or "urn:uuid:<uuid in lower case>"; an XDS
+  "<root>^<extension>" identifier is not stored (data-model DOCUMENTS.md, "A document already held").
 - Ask the patient for the file's full path on their computer, then
   attach_file({ eventId, path }). Only the file name is sent; the file is not shown to you.
 - Read it back with get_events. A document event without its file shows as a failed import:

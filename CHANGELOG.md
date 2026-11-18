@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-18
+
+### Added
+- `list_document_kinds({ key? })`, on both servers (no account needed). It lists data-model 4.17.0 `pack.documentKinds`: the kinds of medical document from the Swiss EPR value sets. Each kind shows its labels (en, fr, de, it), when to pick it, its class and type codes (a Swiss-extension code is marked) and its `timeBasis`. With `key`, it returns that kind's class and type Codings as JSON, to copy into a `file/xds-v1` document's content. A pack before 4.17.0 has no kinds, and the tool says so.
+- `get_events({ documentUniqueId })` (B-2026-11-18-4) runs the data model's "a document already held" lookup. It takes an XDS `uniqueId` string or a FHIR `masterIdentifier` `{ system, value }`, puts it in its one spelling and matches it on `clientData.hdsDocumentUniqueId` over the whole time range. It is refused when no document can hold the identifier (`<root>^<extension>`, a `urn:oid:` system). The normalisation is a port of hds-lib 2.55.1 `normalizeDocumentUniqueId`.
+
+### Changed
+- Import guide overview, section 2b: pick class and type with `list_document_kinds`, date the document per its `timeBasis`, and look a document with an identifier up with `get_events({ documentUniqueId })` before creating it.
+
 ## [0.24.0] - 2026-11-17
 
 Verified live on demo (throwaway account, rc.85): a `create_event` then `attach_file` round trip reads back the same

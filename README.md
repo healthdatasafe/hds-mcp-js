@@ -112,12 +112,13 @@ you just ask your agent in plain language. The agent picks the right tool.
 |---|---|---|
 | `connect` | Sign you into demo HDS via your browser | *"Sign me in to demo HDS."* |
 | `list_streams` | Show the tree of data containers in your account | *"What streams do I have?"* |
-| `get_events` | Read events (data points) — filterable by stream / type / time | *"Get my last week of body events."* |
+| `get_events` | Read events (data points) — filterable by stream / type / time, or find a document already stored by its own identifier | *"Get my last week of body events."* |
 | `search_items` | Search the HDS data-model for the right item to log | *"What HDS item should I use for basal body temperature?"* |
 | `get_item` | Get the full definition of one HDS item by key | *"Show me the spec for body-weight."* |
 | `get_event_type` | Show what one event type accepts (its content schema) | *"What does a coded lab result look like?"* |
 | `list_model_streams` | Browse the data model's categories and their items | *"What can HDS store about fertility?"* |
 | `list_datasources` | List the coded lists HDS offers (conditions, medications, …) | *"Which coded lists does HDS have?"* |
+| `list_document_kinds` | List the kinds of medical document (lab report, discharge summary, …) with the codes and the date each one uses | *"What kind of document is this discharge letter, and which date counts?"* |
 | `search_dataset` | Find a coded entry (diagnosis, drug, treatment) to record | *"Find the code for endometriosis."* |
 | `create_event` | Write a single event into a stream | *"Log my weight as 72 kg right now."* |
 | `import_batch` | Write up to 500 events in one call | *"Import every row of this CSV as a temperature event."* |
