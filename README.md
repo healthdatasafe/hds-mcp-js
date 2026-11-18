@@ -282,4 +282,6 @@ tests/
   phase2.test.ts       # read-back filters, delete order, model paths
 ```
 
-License: BSD-3-Clause.
+## License
+
+[BSD-3-Clause](LICENSE)
