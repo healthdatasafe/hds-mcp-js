@@ -1,15 +1,35 @@
 # hds-mcp
 
-> **Status: v0.11.0 — production access when you're ready.** One-line
-> install (`npx -y github:healthdatasafe/hds-mcp-js`), demo sandbox by
-> default, and now a per-session opt-in for writing to your real
-> production account — you ask for it explicitly, the agent passes
-> `enableWrites: true`, you confirm on the consent screen. See
-> [Demo by default — production when you're ready](#demo-by-default--production-when-youre-ready).
+Connect [Health Data Safe](https://datasafe.dev) to your AI assistant (Claude, ChatGPT, …) so it can sign you in,
+read your data, add to it, and help you make sense of it. No coding required.
 
-Connect [Health Data Safe](https://datasafe.dev) to your AI agent (Claude
-Desktop, ChatGPT desktop, Cursor, …) so it can sign you in, read your data,
-and help you make sense of it. No coding required.
+This repository is the code of the HDS MCP server. It runs in **two ways**: you only need one.
+
+## Which one do I need?
+
+| | **The HDS connector** (hosted by HDS) | **This server on your computer** (local) |
+|---|---|---|
+| What you do | Add a URL in your AI app and sign in. Nothing to install. | Install it in Claude Desktop: one click with the extension (`.mcpb`). |
+| Where it runs | On HDS's servers, one per region (Switzerland, USA) | On your computer, started by Claude Desktop |
+| Works with | Claude.ai, ChatGPT, Claude Code, Claude Desktop | Claude Desktop (and other MCP apps that run local servers) |
+| Read, add, fix your data | Yes | Yes |
+| Store the original file of a document (PDF, photo) | No: a server never reads files on your computer | Yes (`attach_file`) |
+| Import a whole archive of your records from files | No: values only, through the chat | Yes, with a review page before anything is written (`import_*` tools, extension only) |
+| Data-model search | On HDS's server | On your computer |
+| Updates | Automatic | A new version of the extension |
+
+**Use the connector** for everyday use: asking about your data, adding a value, fixing one. Get its URL from your
+HDS account, on the "AI assistant" tab (<https://account.hds.ngo/account/ai-assistant>), which also shows the client
+id for your app. The steps are on the [agents site](https://agents.datasafe.dev) (`llms-full.txt` § 4a-remote).
+
+**Install this server locally** when you want to bring your records in from files on your computer: the original
+documents, or a whole archive (scans, lab reports, app exports). The extension is on the
+[latest release](https://github.com/healthdatasafe/hds-mcp-js/releases/latest): download `hds-mcp-<version>.mcpb`,
+double-click it. The rest of this page is about the local server.
+
+Both start on the **demo** platform (a test platform for trying things out) unless you ask for your real account;
+writing to your real account needs your explicit ask and your confirmation on the consent screen. See
+[Demo by default — production when you're ready](#demo-by-default--production-when-youre-ready).
 
 ---
 
@@ -27,9 +47,11 @@ Ask your agent things like:
 
 > *"Here's a CSV of my fertility chart — import every row as an event."*
 
-For the bigger "read a folder of Excel + scanned paper and import all of it"
-flow you still need your agent client to provide file I/O + OCR (filesystem
-MCP + vision). See [Roadmap](#roadmap).
+> *"Import the records in this folder: show me what you will write first."* (local server, with the extension)
+
+To import a folder of documents, your assistant reads them (it needs file access and vision in your AI app), builds
+an import package, and the local server's `import_*` tools check it, show you every value on a page in your browser,
+and write it after your go. See [What the tools do](#what-the-tools-do).
 
 ---
 
@@ -37,14 +59,16 @@ MCP + vision). See [Roadmap](#roadmap).
 
 1. A computer (macOS or Windows).
 2. **Claude Desktop** installed → <https://claude.ai/download>.
-3. **Node.js 22 or newer** → <https://nodejs.org> (any LTS works; pick the green button).
-4. A browser (any modern one) for the sign-in step.
+3. A browser (any modern one) for the sign-in step.
+4. Only for the JSON install below (not the extension): **Node.js 22 or newer** → <https://nodejs.org> (any LTS
+   works; pick the green button).
 
-> **For the bigger "process a folder of documents" scenario** you will also
-> need filesystem access from inside your agent. Claude Desktop ships with a
-> built-in filesystem tool but it's off by default — check the Anthropic
-> docs for your agent client to enable it. (No copy-paste setup from us yet;
-> see Roadmap.)
+> **Easiest:** the Claude Desktop extension. Download `hds-mcp-<version>.mcpb` from the
+> [latest release](https://github.com/healthdatasafe/hds-mcp-js/releases/latest) and double-click it (or Settings →
+> Extensions). It includes the import tools. The 3 steps below are the manual route.
+>
+> **To process a folder of documents**, your assistant also needs to read the files: Claude Desktop ships a
+> filesystem tool, off by default; check your AI app's docs to turn it on.
 
 ---
 
