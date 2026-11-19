@@ -143,7 +143,8 @@ function diff (stored: any, want: any): Record<string, unknown> | null {
   for (const f of ['content', 'time', 'type']) if (canonical(stored[f] ?? null) !== canonical(want[f] ?? null)) update[f] = want[f];
   if (canonical(stored.streamIds ?? []) !== canonical(want.streamIds)) update.streamIds = want.streamIds;
   const storedDuration = typeof stored.duration === 'number' && stored.duration > 0 ? stored.duration : null;
-  const wantDuration = want.duration == null ? null : (want.time + want.duration) - want.time;
+  const read = want.duration == null ? 0 : (want.time + want.duration) - want.time;
+  const wantDuration = read > 0 ? read : null;
   if (storedDuration == null ? wantDuration != null : (wantDuration == null || Math.abs(storedDuration - wantDuration) > 1e-6)) {
     update.duration = wantDuration ?? 0;
   }
@@ -203,11 +204,11 @@ export async function writePackage (
   for (const [k, [ev]] of existing) { idOf.set(k, ev.id); ownIds.add(ev.id); }
   counts.orphans = [...existing.keys()].filter((k) => !byKey.has(k)).length;
   const uploads: Array<{ e: PkgEvent; id: string }> = [];
-  const fileFor = (e: PkgEvent, ev: any) => {
+  const fileFor = (e: PkgEvent, ev: any, held = false) => {
     if (!e.attachment || ev.trashed) return;
     const f = storedFile(ev);
     if (f == null) uploads.push({ e, id: ev.id });
-    else if (f.size != null && f.size !== e.attachment.size) errors.push({ code: 'document-file-changed', line: e.line });
+    else if (!held && f.size != null && f.size !== e.attachment.size) errors.push({ code: 'document-file-changed', line: e.line });
   };
 
   for (let li = 0; li < n.levels.length; li++) {
@@ -231,7 +232,7 @@ export async function writePackage (
         if (held) {
           idOf.set(key, held.id);
           counts.heldElsewhere++;
-          fileFor(e, held);
+          fileFor(e, held, true);
           continue;
         }
       }
@@ -323,13 +324,13 @@ export async function verifyPackage (pkg: LoadedPackage, n: Normalized, t: Trans
   }
   const byKey = new Map(n.events.map((e) => [e.sourceKey, e]));
   r.orphans = [...existing.keys()].filter((k) => !byKey.has(k)).length;
-  const fileOf = (e: PkgEvent, ev: any) => {
+  const fileOf = (e: PkgEvent, ev: any, held = false) => {
     if (!e.attachment || ev.trashed) return;
     const f = storedFile(ev);
     if (f == null) {
       r.documentsWithoutFile++;
       r.differences.push({ code: 'document-without-file', line: e.line });
-    } else if (f.size != null && f.size !== e.attachment.size) {
+    } else if (!held && f.size != null && f.size !== e.attachment.size) {
       r.documentsFileChanged++;
       r.differences.push({ code: 'document-file-changed', line: e.line });
     }
@@ -341,7 +342,7 @@ export async function verifyPackage (pkg: LoadedPackage, n: Normalized, t: Trans
       if (!stored) {
         const id = e.type === DOCUMENT_EVENT_TYPE ? normalizeDocumentUniqueId((e.content as any)?.uniqueId) : null;
         const held = id ? await findHeldDocument(t, documentUniqueIdKey(id)) : null;
-        if (held) { idOf.set(key, held.id); r.heldElsewhere++; fileOf(e, held); continue; }
+        if (held) { idOf.set(key, held.id); r.heldElsewhere++; fileOf(e, held, true); continue; }
         r.missing++;
         r.differences.push({ code: 'missing', line: e.line });
         continue;

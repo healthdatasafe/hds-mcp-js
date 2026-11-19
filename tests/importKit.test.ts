@@ -425,3 +425,51 @@ test('[IMP20] a document whose file changed under the same key is reported, not 
   assert.deepEqual(res.errors, [{ code: 'document-file-changed', line: 3 }]);
   assert.equal((await r.verify()).documentsFileChanged, 1);
 });
+
+test('[IMP21] the production-write gate reaches the agent as is', async () => {
+  const dir = await makePackage(baseEvents());
+  setImportTestHooks({ pack, transport: fakeCore().t, open: async () => {} });
+  setApiEndpoint('https://tok@someone.api.datasafe.dev/');
+  try {
+    await assert.rejects(importWriteHandler({ packagePath: dir, confirm: true }), /enableWrites/);
+  } finally {
+    clearApiEndpoint();
+    setImportTestHooks({ pack: null, transport: null, open: null });
+  }
+});
+
+test('[IMP22] a review proof shipped in the package, or a file swapped after the review, is not accepted', async () => {
+  const core = fakeCore();
+  const dir = await makePackage(baseEvents());
+  await fsp.mkdir(path.join(dir, '.hds-import'));
+  await fsp.writeFile(path.join(dir, '.hds-import', 'reviewed.json'), JSON.stringify({ digest: 'x', packVersion: '9.9.9' }));
+  setImportTestHooks({ pack, transport: core.t, open: async () => {} });
+  setApiEndpoint('https://tok@demo-user.demo.datasafe.dev/');
+  try {
+    await assert.rejects(importWriteHandler({ packagePath: dir, confirm: true }), /not reviewed/);
+    await importReviewHandler({ packagePath: dir });
+    await fsp.writeFile(path.join(dir, 'files/report.pdf'), Buffer.from('%PDF-1.4\n% swapped\n'));
+    await assert.rejects(importWriteHandler({ packagePath: dir, confirm: true }), /not reviewed/);
+    assert.equal(core.events.size, 0);
+  } finally {
+    clearApiEndpoint();
+    setImportTestHooks({ pack: null, transport: null, open: null });
+  }
+});
+
+test('[IMP23] a document another writer holds with another file size: linked, no file-changed report', async () => {
+  const core = fakeCore();
+  const [held] = await core.t.batch([{ method: 'events.create', params: { streamIds: ['documents'], type: 'file/xds-v1', time: T0, content: { title: 'From the EPR' }, clientData: { sourceKey: 'epr:doc:9', hdsDocumentUniqueId: 'urn:ietf:rfc:3986|urn:oid:2.999.1' } } }]);
+  core.events.get(held.event.id).attachments = [{ id: 'a', fileName: 'epr.pdf', size: 99999 }];
+  const r = await run(await makePackage(baseEvents()), core);
+  const res = await r.write();
+  assert.deepEqual(res.errors, []);
+  const v = await r.verify();
+  assert.equal(v.documentsFileChanged + v.missing + v.different, 0);
+});
+
+test('[IMP24] two documents of the package with one identifier are refused', async () => {
+  const doc = (i: number) => ({ sourceKey: `testkit:doc:${i}`, itemKey: 'document', content: { title: 't', uniqueId: { system: 'urn:ietf:rfc:3986', value: 'urn:oid:2.999.1' } }, time: T0, attachment: 'files/report.pdf' });
+  const { report } = await run(await makePackage([doc(1), doc(2)]), fakeCore());
+  assert.ok(report.problems.some((p) => p.code === 'document-uniqueid-duplicate' && p.line === 2));
+});

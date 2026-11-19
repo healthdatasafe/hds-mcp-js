@@ -48,9 +48,12 @@ export function platformNote (platform: Platform): string {
 
 export const PROD_WRITES_ENABLED = process.env.HDS_MCP_PROD_WRITES_ENABLED === 'true';
 
+/** The production-write gate's refusal: its text tells the agent what to do, so it reaches the model as is. */
+export class WriteGateError extends Error {}
+
 export function assertWriteAllowed (apiEndpoint: string, sessionProdWritesEnabled = false): void {
   if (isProdHost(apiEndpoint) && !sessionProdWritesEnabled && !PROD_WRITES_ENABLED) {
-    throw new Error(
+    throw new WriteGateError(
       'Writes to the production HDS host are disabled for this session. ' +
       'If the user explicitly asked to write to their production account, re-run connect ' +
       "with { host: 'prod', enableWrites: true } — they confirm on the sign-in consent screen. " +

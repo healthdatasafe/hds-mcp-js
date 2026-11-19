@@ -6,10 +6,12 @@ import { z } from 'zod';
 import { loadPack, type DataModelPack } from '../dataModel/pack.ts';
 import { apiBatch, apiPostMultipart } from '../lib/apiCall.ts';
 import { UpstreamError } from '../lib/fetchPolicy.ts';
-import { assertWriteAllowed } from '../lib/hostPolicy.ts';
+import { assertWriteAllowed, WriteGateError } from '../lib/hostPolicy.ts';
 import { getApiEndpoint, getProdWritesEnabled, inRequestContext, isConnected } from '../auth/session.ts';
-import { KIT_DIR, PackageError, kitDir, loadPackage, readKitFile, writeKitFile } from './pkg.ts';
-import { buildReport, normalizePackage, type Report } from './inspect.ts';
+import { createHash } from 'node:crypto';
+import { KIT_DIR, PackageError, kitDir, loadPackage, readInside, writeKitFile, type LoadedPackage } from './pkg.ts';
+import { ATTACH_MAX_BYTES } from '../tools/attachFile.ts';
+import { buildReport, normalizePackage, type Normalized, type Report } from './inspect.ts';
 import { renderReview } from './review.ts';
 import { ImportStop, verifyPackage, writePackage, type Counts, type Transport, type WriteError } from './writer.ts';
 
@@ -29,7 +31,7 @@ class KitError extends Error {}
  * error as its code only (Node's message holds the full path); anything else as its kind.
  */
 export function safeError (err: unknown): Error {
-  if (err instanceof KitError || err instanceof ImportStop) return err;
+  if (err instanceof KitError || err instanceof ImportStop || err instanceof WriteGateError) return err;
   if (err instanceof PackageError) return new Error(`Package refused (${err.code}): ${err.message}`);
   if (err instanceof UpstreamError) return new Error(`HDS refused the request (${err.errorId ?? 'error'}, HTTP ${err.status ?? '?'}).`);
   const code = (err as NodeJS.ErrnoException)?.code;
@@ -85,7 +87,8 @@ function stdioOnly (): void {
 async function check (packagePathArg: string) {
   stdioOnly();
   const pkg = await loadPackage(packagePathArg);
-  const pack = testing.pack ?? await loadPack();
+  let pack: DataModelPack;
+  try { pack = testing.pack ?? await loadPack(); } catch { throw new KitError('The HDS data model could not be loaded (network?): try again in a moment.'); }
   const n = await normalizePackage(pkg, pack);
   const report = buildReport(pkg, pack, n);
   return { pkg, pack, n, report };
@@ -113,8 +116,8 @@ export const importReviewHandler = guarded(async ({ packagePath: p, lang }: { pa
   if (!pkg.valid) throw new KitError('The package manifest is not valid: run import_inspect and fix it first.');
   await writeKitFile(pkg.root, 'report.json', JSON.stringify(report, null, 2) + '\n');
   await writeKitFile(pkg.root, 'review.html', renderReview(pack, report, n, { lang }));
-  // what the person reviewed: import_write writes only this exact package, on this data model
-  await writeKitFile(pkg.root, 'reviewed.json', JSON.stringify({ digest: pkg.digest, packVersion: pack.version ?? null, ok: report.ok }) + '\n');
+  // what the person reviewed: import_write writes only this exact package, files included, on this data model
+  reviewed.set(pkg.root, { digest: await fullDigest(pkg, n), packVersion: pack.version ?? null });
   let opened = true;
   const file = path.join(await kitDir(pkg.root), 'review.html');
   await (testing.open ?? open)(pathToFileURL(file).href).catch(() => { opened = false; });
@@ -126,6 +129,23 @@ export const importReviewHandler = guarded(async ({ packagePath: p, lang }: { pa
       'Do not open or read the page yourself: it holds the values.'
   );
 });
+
+/**
+ * What the person reviewed, kept in this process only (a file in the package could be shipped or written by anyone):
+ * package root → digest of manifest.json, events.jsonl and every attached file, and the data-model version.
+ * A restart means reviewing again.
+ */
+const reviewed = new Map<string, { digest: string; packVersion: string | null }>();
+
+async function fullDigest (pkg: LoadedPackage, n: Normalized): Promise<string> {
+  const h = createHash('sha256').update(pkg.digest);
+  for (const e of n.events) {
+    if (!e.attachment) continue;
+    h.update('\n' + e.attachment.rel + '\n');
+    h.update(await readInside(pkg.root, e.attachment.rel, ATTACH_MAX_BYTES));
+  }
+  return h.digest('hex');
+}
 
 interface Job { state: 'starting' | 'running' | 'done' | 'stopped' | 'failed'; startedAt: number; endedAt?: number; counts: Counts; errors: WriteError[]; stop?: string; events: number }
 let job: Job | null = null;
@@ -149,11 +169,11 @@ export const importWriteHandler = guarded(async ({ packagePath: p, confirm }: { 
     const transport = testing.transport ?? boundTransport();
     const { pkg, pack, n, report } = await check(p);
     if (!report.ok) throw new KitError(`The package has ${report.blocking} blocking problem(s): run import_inspect, fix them, and review again. Nothing was written.`);
-    const reviewed = await readKitFile(pkg.root, 'reviewed.json').then((s) => s ? JSON.parse(s) : null).catch(() => null);
-    if (reviewed?.digest !== pkg.digest) {
+    const seen = reviewed.get(pkg.root);
+    if (seen == null || seen.digest !== await fullDigest(pkg, n)) {
       throw new KitError('The package was not reviewed as it is now (or never): run import_review and let the person check it again. Nothing was written.');
     }
-    if (reviewed?.packVersion !== (pack.version ?? null)) {
+    if (seen.packVersion !== (pack.version ?? null)) {
       throw new KitError('The data model changed since the review: run import_review again before writing. Nothing was written.');
     }
     current.state = 'running';

@@ -229,6 +229,15 @@ export async function normalizePackage (pkg: LoadedPackage, pack: DataModelPack)
     if (new Set(e.streamIds.map((s) => roots.get(s))).size > 1) problems.push({ code: 'streams-several-roots', line: e.line, blocking: true });
     for (const r of e.refs) if (!seen.has(r)) problems.push({ code: 'ref-dangling', line: e.line, blocking: true });
   }
+  const docIds = new Map<string, number>();
+  for (const e of events) {
+    if (e.type !== DOCUMENT_EVENT_TYPE) continue;
+    const id = normalizeDocumentUniqueId((e.content as any)?.uniqueId);
+    if (id == null) continue;
+    const k = id.system + '|' + id.value;
+    if (docIds.has(k)) problems.push({ code: 'document-uniqueid-duplicate', line: e.line, detail: `line-${docIds.get(k)}`, blocking: true });
+    else docIds.set(k, e.line);
+  }
   const { levels, cycle } = dependencyLevels(new Map(events.map((e) => [e.sourceKey, e.refs])));
   for (const k of cycle) problems.push({ code: 'ref-cycle', line: seen.get(k), blocking: true });
   return { events, levels, problems };
