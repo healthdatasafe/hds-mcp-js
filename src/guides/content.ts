@@ -97,6 +97,23 @@ get_events({ sourceKeyPrefix, state: "all" }), match by sourceKey: new key = wri
 record = update_event (clientData is merged key by key; null removes a key); trashed = leave it, the
 patient removed it. Undo: delete_events({ sourceKeyPrefix }) lists what would go; call again
 with confirm: true only after the patient agrees.
+
+## 9. A whole archive: the import package (when import_inspect is among your tools)
+More than a few dozen values, or several documents: do not send them through tool calls. Write a
+package folder on the patient's computer and let the import tools write it:
+- manifest.json: { "format": "hds-import-package/1", "importName": "<a-z0-9->", "tool": "<sourceKey
+  prefix>" }. events.jsonl: one event per line: sourceKey "<tool>:<kind>:<id>", itemKey (or
+  streamIds + type), content, time (seconds, required), optional duration, description, clientData
+  (never sourceKey or related: the kit sets them), relatedKeys, attachment "files/<name>" (a
+  document's PDF/JPEG/PNG), evidence { file, page } (the source page, for the review only).
+  Where an event id of the package is expected (supersedes, authors[].eventId, encounterId), write
+  { "$ref": "<sourceKey>" }.
+- import_inspect: fix every blocking problem (line numbers) and inspect again. It returns the roots
+  and importName for connect: tell the patient those kinds of data before signing in.
+- import_review: the page opens in their browser; they check the values there, not in the chat.
+- import_write with confirm: true only after their go; follow import_status; then import_verify.
+  Running it again is safe (resumes, never duplicates, leaves what they deleted).
+- import_cleanup at the end; the package folder itself is a copy of their records: tell them.
 `,
 
   'lab-report': `# Lab reports (PDF or scan)
