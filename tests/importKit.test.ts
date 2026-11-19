@@ -79,6 +79,7 @@ function fakeCore ({ failUploads = false } = {}) {
   const events = new Map<string, any>();
   let n = 0;
   const writes: string[] = [];
+  const streams = new Set<string>();
   const matches = (e: any, p: any) => (p.types == null || p.types.includes(e.type)) &&
     (p.state === 'all' || !e.trashed) &&
     (p.clientData ?? []).every((c: any) => {
@@ -87,6 +88,8 @@ function fakeCore ({ failUploads = false } = {}) {
     });
   const t: Transport = {
     batch: async (calls) => calls.map((c) => {
+      if (c.method === 'streams.get') return { streams: [...streams].map((id) => ({ id })) };
+      if (c.method === 'streams.create') { writes.push('streams.create'); streams.add(c.params.id); return { stream: c.params }; }
       if (c.method === 'events.get') {
         const all = [...events.values()].filter((e) => matches(e, c.params));
         return { events: structuredClone(all.slice(c.params.skip ?? 0, (c.params.skip ?? 0) + (c.params.limit ?? 20))) };
@@ -124,7 +127,7 @@ function fakeCore ({ failUploads = false } = {}) {
 async function run (dir: string, core: ReturnType<typeof fakeCore>) {
   const pkg = await loadPackage(dir);
   const n = await normalizePackage(pkg, pack);
-  return { pkg, n, report: buildReport(pkg, pack, n), write: () => writePackage(pkg, n, core.t), verify: () => verifyPackage(pkg, n, core.t) };
+  return { pkg, n, report: buildReport(pkg, pack, n), write: () => writePackage(pkg, pack, n, core.t), verify: () => verifyPackage(pkg, n, core.t) };
 }
 
 test('[IMP1] inspect: a valid package gives counts and roots, and no value', async () => {
@@ -177,6 +180,7 @@ test('[IMP4] write: sources first, $ref resolved, links mirrored, file uploaded;
   const res = await r.write();
   assert.deepEqual(res.errors, []);
   assert.equal(res.counts.created, 3);
+  assert.equal(core.writes.filter((w) => w === 'streams.create').length, 5, 'body, body-weight, encounter, encounter-providers, documents: parents first');
   assert.equal(res.counts.filesUploaded, 1);
   const all = [...core.events.values()];
   const prov = all.find((e) => e.type === 'provider/practitioner-v1');

@@ -116,7 +116,7 @@ export async function importWriteHandler ({ packagePath: p, confirm }: { package
   }
   const current: Job = { state: 'running', startedAt: Date.now(), counts: emptyCounts(), errors: [], events: n.events.length };
   job = current;
-  writePackage(pkg, n, transport, (c) => { current.counts = c; })
+  writePackage(pkg, pack, n, transport, (c) => { current.counts = c; })
     .then((r) => { current.counts = r.counts; current.errors = r.errors; current.state = 'done'; })
     .catch((err) => {
       current.state = err instanceof ImportStop ? 'stopped' : 'failed';

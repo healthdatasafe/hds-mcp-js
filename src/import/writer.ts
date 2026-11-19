@@ -1,3 +1,5 @@
+import { localized, type DataModelPack } from '../dataModel/pack.ts';
+import { modelPath } from '../tools/ensureStreams.ts';
 import { normalizeDocumentUniqueId, documentUniqueIdKey, DOCUMENT_UNIQUE_ID_KEY } from '../dataModel/documentUniqueId.ts';
 import { DOCUMENT_EVENT_TYPE, FORMATS } from '../tools/attachFile.ts';
 import { ALL_TIME } from '../tools/getEvents.ts';
@@ -67,6 +69,31 @@ export async function readImport (t: Transport, tool: string): Promise<Map<strin
   return byKey;
 }
 
+/** Creates the model streams the package writes to that the account lacks, parents first (as ensure_streams). */
+export async function ensureStreams (t: Transport, pack: DataModelPack, streamIds: string[]): Promise<number> {
+  const [got] = await t.batch([{ method: 'streams.get', params: { state: 'all' } }]);
+  if (got?.error) throw new ImportStop('account-read-failed', `Reading the account's streams failed (${got.error.id ?? 'error'}); nothing was written.`);
+  const existing = new Set<string>();
+  const walk = (list: any[]) => { for (const s of list ?? []) { existing.add(s.id); walk(s.children); } };
+  walk(got?.streams ?? []);
+  const toCreate: Array<{ id: string; name: string; parentId: string | null }> = [];
+  for (const id of new Set(streamIds)) {
+    const p = modelPath((pack.streams ?? []) as any[], id) ?? [];
+    p.forEach((s: any, i: number) => {
+      if (existing.has(s.id)) return;
+      existing.add(s.id);
+      toCreate.push({ id: s.id, name: s.label ? localized(s.label, 'en') : (s.name ?? s.id), parentId: i === 0 ? null : p[i - 1].id });
+    });
+  }
+  if (toCreate.length === 0) return 0;
+  const results = await t.batch(toCreate.map((s) => ({ method: 'streams.create', params: s })));
+  const failed = results.filter((r: any) => !r?.stream && r?.error?.id !== 'item-already-exists');
+  if (failed.length > 0) {
+    throw new ImportStop('streams-create-failed', `${failed.length} stream(s) could not be created (${failed[0]?.error?.id ?? 'error'}): check that connect covered every root import_inspect listed. Nothing else was written.`);
+  }
+  return toCreate.length;
+}
+
 /** The `clientData` the kit owns on one event, with the links of its content mirrored (DOCUMENTS.md, PROVENANCE.md). */
 function wantedClientData (e: PkgEvent, content: any, ids: string[], stored: any, ownIds: Set<string>): Record<string, unknown> {
   const cd: Record<string, unknown> = { ...e.clientData, sourceKey: e.sourceKey };
@@ -124,7 +151,7 @@ function hasFile (ev: any): boolean {
  * created, then its file uploaded; one without its file (a run cut short) gets it on the next run.
  */
 export async function writePackage (
-  pkg: LoadedPackage, n: Normalized, t: Transport, onProgress: (c: Counts) => void = () => {}
+  pkg: LoadedPackage, pack: DataModelPack, n: Normalized, t: Transport, onProgress: (c: Counts) => void = () => {}
 ): Promise<WriteResult> {
   const tool = pkg.manifest!.tool;
   const counts: Counts = { created: 0, updated: 0, unchanged: 0, trashed: 0, heldElsewhere: 0, filesUploaded: 0, orphans: 0, failed: 0 };
@@ -133,6 +160,7 @@ export async function writePackage (
   for (const [, evs] of existing) {
     if (evs.length > 1) throw new ImportStop('account-duplicate-key', 'The account holds two events under one sourceKey of this import; nothing was written. Look at it with get_events (sourceKeyPrefix) before running again.');
   }
+  await ensureStreams(t, pack, n.events.flatMap((e) => e.streamIds));
   const byKey = new Map(n.events.map((e) => [e.sourceKey, e]));
   const idOf = new Map<string, string>();
   const ownIds = new Set<string>();
