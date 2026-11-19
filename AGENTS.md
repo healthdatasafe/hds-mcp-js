@@ -16,8 +16,17 @@ when you are editing the MCP code itself.
 
 ## What `hds-mcp` is (and is not)
 
-`hds-mcp` is a stdio MCP server that exposes Health Data Safe (HDS) /
-Pryv operations to AI agents. It is **deliberately thin** — it does not
+`hds-mcp` exposes Health Data Safe (HDS) / Pryv operations to AI agents. One codebase, two servers:
+
+- **Hosted connector** (`hds-mcp-http`, [`src/httpMain.ts`](src/httpMain.ts)): runs on HDS's servers as a sidecar of
+  each core (demo, us1, ch1), Streamable HTTP, OAuth. The person adds a URL in their AI app; nothing to install.
+  It never reads the caller's disk: no `connect`, no `attach_file`, no import tools.
+- **Local server** (`hds-mcp`, [`src/index.ts`](src/index.ts)): stdio, on the person's computer, started by Claude
+  Desktop (the `.mcpb` extension or a JSON config entry). Adds `connect` (browser sign-in), `attach_file`, and with
+  `HDS_MCP_IMPORT=true` (the extension) the import kit: the only way to bring records in from files.
+
+The everyday choice for a person is the hosted connector; the local server is for importing from files
+(README "Which one do I need?"). Both are **deliberately thin** — it does not
 ship filesystem I/O, OCR, vision, Excel parsing, or any composition
 beyond mapping MCP tool calls to Pryv API calls. The agent's client is
 expected to provide everything else.

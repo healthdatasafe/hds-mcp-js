@@ -4,7 +4,7 @@
   "display_name": "Health Data Safe",
   "version": "0.0.0",
   "description": "Read and add to your Health Data Safe account, and import your own medical records from files on this computer.",
-  "long_description": "Health Data Safe (HDS) tools for your AI assistant: look up the HDS data model, read your account, add data, and import a package of your own medical records from files on this computer after you review it on a local page. Signs in through your browser; nothing is stored on disk but the import's own files. Connects to the HDS demo platform unless you ask for production.",
+  "long_description": "The local Health Data Safe (HDS) server for your AI assistant: look up the HDS data model, read your account, add data, and import your own medical records from files on this computer after you check them on a page in your browser. For everyday use without files, the hosted HDS connector (a URL from your HDS account, AI assistant tab) needs no install. Signs in through your browser; connects to the HDS demo platform unless you ask for your real account.",
   "author": {
     "name": "Health Data Safe",
     "url": "https://www.healthdatasafe.org"
@@ -16,20 +16,30 @@
   },
   "support": "https://github.com/healthdatasafe/hds-mcp-js/issues",
   "license": "BSD-3-Clause",
-  "keywords": ["health", "medical records", "HDS", "Pryv"],
+  "keywords": [
+    "health",
+    "medical records",
+    "HDS",
+    "Pryv"
+  ],
   "server": {
     "type": "node",
     "entry_point": "dist/index.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/dist/index.js"],
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
       "env": {
         "HDS_MCP_IMPORT": "true"
       }
     }
   },
   "compatibility": {
-    "platforms": ["darwin", "win32"],
+    "platforms": [
+      "darwin",
+      "win32"
+    ],
     "runtimes": {
       "node": ">=22.0.0"
     }
