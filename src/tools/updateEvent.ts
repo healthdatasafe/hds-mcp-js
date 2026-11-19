@@ -14,8 +14,8 @@ export const updateEventInput = {
     clientData: z.record(z.string(), z.unknown()).optional(),
     tags: z.array(z.string()).optional()
   }).describe(
-    'Fields to change. clientData replaces the whole clientData object: send every key to keep ' +
-    '(e.g. sourceKey). Content is checked against the event type before writing.'
+    'Fields to change. clientData is merged key by key: send only the keys to change; a key set to null ' +
+    'is removed. Content is checked against the event type before writing.'
   )
 };
 

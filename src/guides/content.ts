@@ -94,7 +94,7 @@ get_events({ sourceKeyPrefix: "<tool>:" }) (page with limit + skip) and say what
 
 ## 8. Re-runs and undo
 get_events({ sourceKeyPrefix, state: "all" }), match by sourceKey: new key = write it; changed
-record = update_event (clientData is replaced whole: keep sourceKey); trashed = leave it, the
+record = update_event (clientData is merged key by key; null removes a key); trashed = leave it, the
 patient removed it. Undo: delete_events({ sourceKeyPrefix }) lists what would go; call again
 with confirm: true only after the patient agrees.
 `,

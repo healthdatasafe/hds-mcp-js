@@ -160,7 +160,7 @@ export function buildServer (
 
   server.tool(
     'update_event',
-    'Change one event in place (content, time, description, clientData, …), e.g. when an import runs again and a record changed: find it by clientData.sourceKey with get_events. Content is checked against the event type first. clientData is replaced whole: keep sourceKey. Never update a trashed event: the user removed it. Refuses on production until the production-write gate is opened.',
+    'Change one event in place (content, time, description, clientData, …), e.g. when an import runs again and a record changed: find it by clientData.sourceKey with get_events. Content is checked against the event type first. clientData is merged key by key (a key set to null is removed). Never update a trashed event: the user removed it. Refuses on production until the production-write gate is opened.',
     updateEventInput,
     wrap('update_event', (a: Parameters<typeof updateEventHandler>[0]) => updateEventHandler(a, { attachFile: !http }))
   );
