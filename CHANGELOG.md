@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+- Every release carries the Claude Desktop extension: `build-image.yml` builds `hds-mcp-<version>.mcpb` and attaches it
+  to the tag's Release (a manual dry run builds it without attaching). A Release created by hand before CI's step is
+  updated instead of failing the run (v0.26.0's run failed that way).
+
 ## [0.26.0] - 2026-11-19
 
 ### Added
