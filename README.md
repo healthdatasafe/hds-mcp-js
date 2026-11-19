@@ -105,7 +105,7 @@ That's it. The connection lasts until you quit Claude Desktop.
 
 ## What the tools do
 
-The MCP exposes twenty tools to your agent. **You don't call them directly —**
+The MCP exposes twenty-one tools to your agent, and six more for importing a whole archive. **You don't call them directly —**
 you just ask your agent in plain language. The agent picks the right tool.
 
 | Tool | What it does | Plain-language prompt |
@@ -131,6 +131,17 @@ you just ask your agent in plain language. The agent picks the right tool.
 | `report_missing_item` | Prepare a GitHub issue asking HDS to add a missing item; you post it yourself | *"HDS has nothing for this test, tell them."* |
 | `report_problem` | Prepare a draft report about a connector failure; you read it and send it yourself | *"This keeps failing, report it."* |
 | `open_account` | Link to the HDS account panel for account tasks, your username filled in | *"I want to change my email."* |
+
+**Importing a whole archive** (the Claude Desktop extension, or `HDS_MCP_IMPORT=true`; this local MCP only). Your agent first builds an import package in a folder on your computer from your files. Then:
+
+| Tool | What it does | Plain-language prompt |
+|---|---|---|
+| `import_inspect` | Checks the package against the HDS data model; answers with counts and problems, never your values | *"Check the package before we import it."* |
+| `import_review` | Opens a page in your browser showing every value next to its source page, for you to check | *"Show me what will be imported."* |
+| `import_write` | Writes the package to your account after you said go; safe to run again (it resumes, never duplicates, leaves what you deleted) | *"Looks right, go ahead."* |
+| `import_status` | How far the import is | *"Is it done?"* |
+| `import_verify` | Reads the import back and compares it with the package | *"Did everything arrive?"* |
+| `import_cleanup` | Deletes the review page and reports from the package folder | *"Clean up."* |
 
 ---
 

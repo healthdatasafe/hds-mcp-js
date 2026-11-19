@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+### Added
+- The local import kit (plan 130, site-agents#36 A4/A5), stdio only and only with `HDS_MCP_IMPORT=true`:
+  `import_inspect`, `import_review`, `import_write`, `import_status`, `import_verify`, `import_cleanup`. The agent builds
+  a package folder (`manifest.json` `hds-import-package/1`, `events.jsonl`, `files/`); the kit checks it on the pack
+  (answers carry counts, item keys, problem codes and line numbers, never values), shows the values on a local review
+  page (no script, CSP), then writes it as a background job with the llms-full § 5f contract: the account is read first
+  on every run, missing model streams created, sources first with `{ "$ref": "<sourceKey>" }` resolved and
+  `clientData.related` mirrored, update only what differs, trashed left, documents created then their file uploaded
+  (resumed when lost), a document already held under its identifier linked, orphans counted and never deleted.
+  Verified on demo (9/9: 340 events + 30 PDFs, re-run 0 writes, crash-resume without duplicate). AGENTS.md
+  "Deliberately thin", second exception.
+- Claude Desktop extension build: `npm run build:mcpb` (`scripts/build-mcpb.sh`, `mcpb/manifest.json`,
+  `@anthropic-ai/mcpb` 2.1.2 pinned) packs the stdio server with production dependencies only, no telemetry module,
+  and `HDS_MCP_IMPORT=true`.
+
+### Fixed
+- `update_event`, the import guide and AGENTS.md said `clientData` is replaced whole; the core merges it key by key and
+  a `null` value removes a key.
+
 ## [0.25.1] - 2026-11-18
 
 ### Changed

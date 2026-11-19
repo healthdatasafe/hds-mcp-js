@@ -52,6 +52,19 @@ export function validateEvent (pack: DataModelPack, type: string, content: unkno
   );
 }
 
+/**
+ * The local import kit's check (plan 130): the same schema validation, as field paths and schema keywords only, so
+ * no value of the person's record is echoed (ajv `params` can hold one: an enum's allowed values, a pattern, a limit).
+ */
+export function contentErrors (pack: DataModelPack, type: string, content: unknown): Array<{ path: string; keyword: string }> | null {
+  const schema = contentSchema(pack, type);
+  if (!schema) return null;
+  const validate = compiled.get(type) ?? ajv.compile(schema);
+  compiled.set(type, validate);
+  if (validate(content === undefined ? null : content)) return [];
+  return (validate.errors ?? []).map((e) => ({ path: e.instancePath || '/', keyword: e.keyword }));
+}
+
 export function packLabel (pack: DataModelPack): string {
   return pack.version ? `data-model ${pack.version}` : 'data-model (version unknown)';
 }
