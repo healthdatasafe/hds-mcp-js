@@ -6,7 +6,7 @@ import { applyStdioIssuesDefault } from './tools/reportProblem.ts';
 
 async function main (): Promise<void> {
   applyStdioIssuesDefault();
-  const server = buildServer();
+  const server = buildServer({ importKit: process.env.HDS_MCP_IMPORT === 'true' });
   const transport = new StdioServerTransport();
   await server.connect(transport);
   safeLog('hds-mcp ready (stdio)');

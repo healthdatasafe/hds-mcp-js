@@ -11,8 +11,8 @@ import { getApiEndpoint, getProdWritesEnabled, inRequestContext } from '../auth/
 export const ATTACH_MAX_BYTES = 20 * 1024 * 1024;
 export const DOCUMENT_EVENT_TYPE = 'file/xds-v1';
 
-interface FileFormat { label: string; mime: string; ext: string[]; magic: number[] }
-const FORMATS: FileFormat[] = [
+export interface FileFormat { label: string; mime: string; ext: string[]; magic: number[] }
+export const FORMATS: FileFormat[] = [
   { label: 'PDF', mime: 'application/pdf', ext: ['.pdf'], magic: [0x25, 0x50, 0x44, 0x46, 0x2d] },
   { label: 'JPEG', mime: 'image/jpeg', ext: ['.jpg', '.jpeg'], magic: [0xff, 0xd8, 0xff] },
   { label: 'PNG', mime: 'image/png', ext: ['.png'], magic: [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] }

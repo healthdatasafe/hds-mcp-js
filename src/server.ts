@@ -21,6 +21,11 @@ import { getConnectionInput, getConnectionHandler } from './tools/getConnection.
 import { reportProblemInput, reportProblemHandler, type LastFailure } from './tools/reportProblem.ts';
 import { openAccountInput, openAccountHandler } from './tools/openAccount.ts';
 import { attachFileInput, attachFileHandler } from './tools/attachFile.ts';
+import {
+  IMPORT_TOOL_DESCRIPTIONS, importInspectInput, importInspectHandler, importReviewInput, importReviewHandler,
+  importWriteInput, importWriteHandler, importStatusInput, importStatusHandler, importVerifyInput, importVerifyHandler,
+  importCleanupInput, importCleanupHandler
+} from './import/tools.ts';
 import { extendWriteHint } from './http/stepUp.ts';
 import { platformNote, type Platform } from './lib/hostPolicy.ts';
 import { scrubError } from './lib/scrubber.ts';
@@ -31,7 +36,8 @@ export const TOOL_NAMES = [
   'connect', 'list_streams', 'get_events', 'create_event', 'import_batch', 'ensure_streams', 'update_event',
   'delete_events', 'search_items', 'get_item', 'get_event_type', 'list_model_streams', 'list_datasources',
   'search_dataset', 'get_connection', 'get_import_guide', 'report_missing_item', 'report_problem', 'open_account',
-  'attach_file', 'list_document_kinds'
+  'attach_file', 'list_document_kinds',
+  'import_inspect', 'import_review', 'import_write', 'import_status', 'import_verify', 'import_cleanup'
 ] as const;
 type ToolName = (typeof TOOL_NAMES)[number];
 
@@ -68,7 +74,7 @@ export const { name: packageName, version } = JSON.parse(
 const PRIVACY_DISCLOSURE = 'Before reading any health record, tell the user in plain words that everything you read is sent to your model provider, that a provider that does not train on their data or a local model is the safer choice, and that they can stop at any point; repeat it before the first read of a production account (reads on production need no unlock).';
 
 export function buildServer (
-  { http = false, oauth = false, extraTools, platform }: { http?: boolean; oauth?: boolean; extraTools?: (server: McpServer) => void; platform?: Platform } = {}
+  { http = false, oauth = false, extraTools, platform, importKit = false }: { http?: boolean; oauth?: boolean; extraTools?: (server: McpServer) => void; platform?: Platform; importKit?: boolean } = {}
 ): McpServer {
   // The last failed tool of this server, for report_problem's draft. One server per stdio process and per raw-mode
   // session (one person each); over OAuth a server lives for one request, so a failure in an earlier request is not seen.
@@ -146,6 +152,17 @@ export function buildServer (
       attachFileInput,
       wrap('attach_file', attachFileHandler)
     );
+  }
+
+  // The local import kit (plan 130, site-agents#36 A4/A5): reads a package folder on this computer, so stdio only and
+  // off unless HDS_MCP_IMPORT=true (the Claude Desktop extension sets it). AGENTS.md "Deliberately thin", exception 2.
+  if (!http && importKit) {
+    server.tool('import_inspect', IMPORT_TOOL_DESCRIPTIONS.import_inspect, importInspectInput, wrap('import_inspect', importInspectHandler));
+    server.tool('import_review', IMPORT_TOOL_DESCRIPTIONS.import_review, importReviewInput, wrap('import_review', importReviewHandler));
+    server.tool('import_write', IMPORT_TOOL_DESCRIPTIONS.import_write, importWriteInput, wrap('import_write', importWriteHandler));
+    server.tool('import_status', IMPORT_TOOL_DESCRIPTIONS.import_status, importStatusInput, wrap('import_status', importStatusHandler));
+    server.tool('import_verify', IMPORT_TOOL_DESCRIPTIONS.import_verify, importVerifyInput, wrap('import_verify', importVerifyHandler));
+    server.tool('import_cleanup', IMPORT_TOOL_DESCRIPTIONS.import_cleanup, importCleanupInput, wrap('import_cleanup', importCleanupHandler));
   }
 
   // Not over OAuth: its grants never carry manage, so stream creation is always refused there. Raw mode holds manage.
