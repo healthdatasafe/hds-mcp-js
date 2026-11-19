@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-19
+
 ### Added
 - The local import kit (plan 130, site-agents#36 A4/A5), stdio only and only with `HDS_MCP_IMPORT=true`:
   `import_inspect`, `import_review`, `import_write`, `import_status`, `import_verify`, `import_cleanup`. The agent builds
