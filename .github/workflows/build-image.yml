@@ -218,4 +218,45 @@ jobs:
             echo "infra/dev-deploy/dokku/deploy-image.sh <app> <dev|prod> ${VERSION}"
             echo '```'
           } > release-notes.md
-          gh release create "$TAG" --title "$TAG" --notes-file release-notes.md
+          # A Release made by hand before this step (e.g. to attach a file) is updated, not a failure.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file release-notes.md
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file release-notes.md
+          fi
+
+  # hds-mcp-js only (plan 130): the Claude Desktop extension of the stdio server, attached to the Release, so the
+  # agents site's "latest release" link always carries one. Not part of the shared plan-102 template.
+  mcpb:
+    name: Claude Desktop extension (.mcpb)
+    runs-on: ubuntu-24.04
+    needs: image
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: ${{ env.INSTALL_CMD }}
+
+      # The manual dry run builds it too (nothing is attached), so a broken build shows before a tag.
+      - name: Build the extension
+        run: |
+          npm run build:mcpb
+          VERSION=$(node -p "require('./package.json').version")
+          FILE="build/hds-mcp-${VERSION}.mcpb"
+          test -f "$FILE"
+          echo "built $(basename "$FILE"), sha256 $(sha256sum "$FILE" | cut -d' ' -f1)"
+
+      - name: Attach it to the Release
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release upload "$TAG" "build/hds-mcp-${TAG#v}.mcpb" --clobber
