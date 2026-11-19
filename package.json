@@ -24,7 +24,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "license": "source-licenser -c .licenser.yml ."
+    "license": "source-licenser -c .licenser.yml .",
+    "build:mcpb": "scripts/build-mcpb.sh"
   },
   "repository": {
     "type": "git",
@@ -56,6 +57,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
     "@types/express": "^5.0.6",
     "@types/node": "^22.0.0",
     "neostandard": "^0.12.0",
