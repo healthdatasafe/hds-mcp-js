@@ -219,7 +219,7 @@ export function buildServer (
 
   server.tool(
     'list_datasources',
-    'List the HDS datasets (curated, coded lists: conditions, findings, medications, procedures, treatments) and the items that take a value from each. Use search_dataset to look up an entry. No account needed.',
+    'List the HDS datasets (curated, coded lists: conditions, findings, medications, procedures, treatments, allergens) and the items that take a value from each. Use search_dataset to look up an entry. No account needed.',
     listDatasourcesInput,
     wrap('list_datasources', listDatasourcesHandler)
   );
@@ -233,7 +233,7 @@ export function buildServer (
 
   server.tool(
     'search_dataset',
-    'Search an HDS dataset (from list_datasources) for a coded entry, e.g. a diagnosis for condition-coded or a drug for medication-intake-coded, and get its label, codes (SNOMED-CT, ATC, RxNorm, …) and hdsId to store unchanged in the item\'s content. The search text is sent to the HDS datasets service of the connected platform (demo when not connected); tell the user when the text names their condition or medication. The lists are curated and incomplete: on no match, tell the user, never invent a code.',
+    'Search an HDS dataset (from list_datasources) for a coded entry, e.g. a diagnosis for condition-coded, a drug for medication-intake-coded or an allergen for allergy-coded, and get its label, codes (SNOMED-CT, ATC, RxNorm, …) and hdsId to store unchanged in the item\'s content. The search text is sent to the HDS datasets service of the connected platform (demo when not connected); tell the user when the text names their condition or medication. The lists are curated and incomplete: on no match, tell the user, never invent a code.',
     searchDatasetInput,
     wrap('search_dataset', searchDatasetHandler)
   );

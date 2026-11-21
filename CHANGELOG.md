@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+- Allergies (data-model 4.21.0, plan 133): the `letter` guide says how to write `allergy-coded` / `allergy-basic`
+  (status stated, never defaulted; no confirmed by default; unknown onset; reactions as text, since the pack has
+  no `manifestation` datasource yet; `lastOccurrence` as a partial date), and `app-export` the FHIR
+  AllergyIntolerance import rules. `search_dataset` and `list_datasources` name the `allergen` dataset.
+
+### Fixed
+- `list_datasources` showed no items for a datasource used by a composite field (`allergen` on `allergy-coded`): it
+  now looks at the composite's fields too.
+
 ### Changed
 - Every release carries the Claude Desktop extension: `build-image.yml` builds `hds-mcp-<version>.mcpb` and attaches it
   to the tag's Release (a manual dry run builds it without attaching). A Release created by hand before CI's step is
