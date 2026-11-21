@@ -174,6 +174,17 @@ Confirm every item below with search_items / get_item before writing.
   Findings: finding-coded. Procedures: procedure-coded, else procedure-basic (name as printed).
   Treatments over time: treatment-coded, else treatment-basic. Each cites the visit with
   clientData.related.<visitId>: true.
+- Allergies and intolerances: allergy-coded (content.allergen from the allergen dataset), else
+  allergy-basic (name as printed). content.status is required: active, inactive or resolved as the
+  letter states it; not stated: ask the patient, never default it. verificationStatus only when
+  stated (unconfirmed or confirmed), never confirmed by default. A "no known allergies" line is
+  not written (no item for it yet); a refuted or erroneous allergy is not written. time = onset;
+  not known (the usual case): hdsTimePrecision "unknown", time the letter date. No duration.
+  categories (food, medication, environment, biologic) only when stated, never an empty list;
+  type (allergy, intolerance) and criticality (low, high, unable-to-assess) only when stated.
+  Reactions: content.reactions [{ manifestations: [{ text }] (each as printed, e.g. "hives"),
+  severity: mild, moderate or severe, notes }]. lastOccurrence as YYYY, YYYY-MM or YYYY-MM-DD,
+  never a full timestamp.
 - Medications: medication-prescription-coded or medication-intake-coded; no coded match: a
   prescription goes to medication-prescription-basic (name as printed, optional posology), an
   intake to medication-intake-basic (name as printed). drug.label = the name as printed, a brand
@@ -186,10 +197,10 @@ Confirm every item below with search_items / get_item before writing.
   status "skipped" on an intake yet (older patient apps count it as taken).
 - Lab values printed in the letter: see lab-report.
 Coded entries: list_datasources, then search_dataset({ datasource, query }) with condition,
-finding, medication, procedure or treatment. Copy the chosen entry's label, description, codes and
-hdsId unchanged into the coded property (content.condition, content.drug, ...; shape from
-get_event_type). The query goes to the HDS datasets service: tell the patient when it names their
-condition or medication. The lists are curated and incomplete: no match = tell the patient, use the
+finding, medication, procedure, treatment or allergen. Copy the chosen entry's
+label, description, codes and hdsId unchanged into the coded property (content.condition,
+content.drug, content.allergen, ...; shape from get_event_type). The query goes to the HDS datasets
+service: tell the patient when it names their condition, medication or allergy. The lists are curated and incomplete: no match = tell the patient, use the
 free-text item where one exists, never invent or edit a code.
 Order, sources first: organization, practitioner, visit, then what cites them. Every event id put
 in content is also set as clientData.related.<eventId>: true, in the same write.
@@ -198,7 +209,7 @@ sourceKey per record, e.g. "<tool>:letter:<letter date>-<what>"; no names or ID 
 Names, reasons and notes are free text that every reader of the stream sees.
 The letter itself: the local MCP stores it as a document (overview 2b) if the patient asks; the
 remote connector cannot store it: say so, the patient keeps it.
-Docs: ENCOUNTER.md, CONDITION.md, MEDICATION.md, PARTIAL-DATES.md in
+Docs: ENCOUNTER.md, CONDITION.md, MEDICATION.md, ALLERGY.md, PARTIAL-DATES.md in
 https://github.com/healthdatasafe/data-model/blob/main/documentation/
 `,
 
@@ -253,7 +264,7 @@ through the chat (site-agents#36).
 - Codes first: search_items finds the item that owns a LOINC, SNOMED-CT, ICD-10 or ICF code
   (e.g. "29463-7"); use that item, not a coded result, when an item owns the code. Without a
   code, search by what was measured: search_items does not know Apple Health type names.
-- Diagnoses, medications, procedures: search_dataset, as in letter. Never invent a code.
+- Diagnoses, medications, procedures, allergies: search_dataset, as in letter. Never invent a code.
 - Lab results with no item: lab-report (coded fallback).
 - FHIR, per data-model FHIR-MAPPING.md § Import: an Observation matches an item by its code and
   category. Its valueQuantity UCUM unit picks the eventType and the value is stored as given; a
@@ -267,6 +278,17 @@ through the chat (site-agents#36).
   Condition clinicalStatus (its condition-clinical code) is content.status. abatementDateTime
   gives the duration (abatement minus time, in seconds), only with status inactive, remission or
   resolved; no abatement: no duration key, never 0 or null.
+  AllergyIntolerance (FHIR-MAPPING.md § AllergyIntolerance): code with an allergen-dataset match:
+  allergy-coded, else allergy-basic by its text or display (a code outside SNOMED-CT and RxNorm is
+  lost). Skip a "no known allergy" record (SNOMED-CT 716186003 and its children, IPS
+  no-known-* or no-allergy-info, or that text) and verificationStatus refuted or
+  entered-in-error. clinicalStatus (active, inactive, resolved) is content.status; none: not
+  imported. Time: onsetDateTime, else onsetPeriod.start, at their precision; onsetAge, onsetRange,
+  onsetString or no onset: hdsTimePrecision "unknown", time the recordedDate (else now), the stated
+  onset as text in notes ("Onset: at age 4 years"). recordedDate is never the onset. No duration.
+  category, type, criticality, reaction severity as their codes; a value outside the set is left
+  out. reaction[]: manifestations as { text } (its text, else a display), severity, description
+  as notes. lastOccurrence: its date part.
 - C-CDA: use the LOINC, SNOMED-CT or ICD-10 codes it carries with search_items and
   search_dataset; same value, unit and date rules.
 - sourceKey from the record's own identity, the same on every run. FHIR:

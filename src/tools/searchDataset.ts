@@ -6,7 +6,7 @@ import { policyFetch, UpstreamError } from '../lib/fetchPolicy.ts';
 
 export const searchDatasetInput = {
   datasource: z.string().min(1).describe(
-    'The datasource key from list_datasources: "condition", "finding", "medication", "procedure", "treatment".'
+    'The datasource key from list_datasources: "condition", "finding", "medication", "procedure", "treatment", "allergen".'
   ),
   query: z.string().min(1).describe(
     'Search text (at least 3 characters), e.g. "endometriosis", "metformin". ' +
