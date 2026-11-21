@@ -182,8 +182,10 @@ Confirm every item below with search_items / get_item before writing.
   not known (the usual case): hdsTimePrecision "unknown", time the letter date. No duration.
   categories (food, medication, environment, biologic) only when stated, never an empty list;
   type (allergy, intolerance) and criticality (low, high, unable-to-assess) only when stated.
-  Reactions: content.reactions [{ manifestations: [{ text }] (each as printed, e.g. "hives"),
-  severity: mild, moderate or severe, notes }]. lastOccurrence as YYYY, YYYY-MM or YYYY-MM-DD,
+  Reactions: content.reactions [{ manifestations, severity: mild, moderate or severe, notes }];
+  each manifestation from the manifestation dataset ({ label, codes } as returned), else { text }
+  as printed (e.g. "hives"); a reaction needs at least one, and no reaction = no reactions key.
+  lastOccurrence as YYYY, YYYY-MM or YYYY-MM-DD,
   never a full timestamp.
 - Medications: medication-prescription-coded or medication-intake-coded; no coded match: a
   prescription goes to medication-prescription-basic (name as printed, optional posology), an
@@ -197,9 +199,9 @@ Confirm every item below with search_items / get_item before writing.
   status "skipped" on an intake yet (older patient apps count it as taken).
 - Lab values printed in the letter: see lab-report.
 Coded entries: list_datasources, then search_dataset({ datasource, query }) with condition,
-finding, medication, procedure, treatment or allergen. Copy the chosen entry's
-label, description, codes and hdsId unchanged into the coded property (content.condition,
-content.drug, content.allergen, ...; shape from get_event_type). The query goes to the HDS datasets
+finding, medication, procedure, treatment, allergen or manifestation. Copy the chosen entry
+as search_dataset returns it, unchanged, into the coded property (content.condition,
+content.drug, content.allergen, a reaction's manifestations, ...; shape from get_event_type). The query goes to the HDS datasets
 service: tell the patient when it names their condition, medication or allergy. The lists are curated and incomplete: no match = tell the patient, use the
 free-text item where one exists, never invent or edit a code.
 Order, sources first: organization, practitioner, visit, then what cites them. Every event id put
@@ -287,8 +289,8 @@ through the chat (site-agents#36).
   onsetString or no onset: hdsTimePrecision "unknown", time the recordedDate (else now), the stated
   onset as text in notes ("Onset: at age 4 years"). recordedDate is never the onset. No duration.
   category, type, criticality, reaction severity as their codes; a value outside the set is left
-  out. reaction[]: manifestations as { text } (its text, else a display), severity, description
-  as notes. lastOccurrence: its date part.
+  out. reaction[]: each manifestation coding matched in the manifestation dataset as { label, codes }
+  as returned, else { text } (its text, else a display); severity; description as notes. lastOccurrence: its date part.
 - C-CDA: use the LOINC, SNOMED-CT or ICD-10 codes it carries with search_items and
   search_dataset; same value, unit and date rules.
 - sourceKey from the record's own identity, the same on every run. FHIR:
