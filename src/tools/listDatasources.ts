@@ -30,8 +30,9 @@ export async function listDatasourcesHandler (): Promise<{ content: Array<{ type
     content: [{
       type: 'text',
       text: `Datasources of the HDS data model (${packLabel(pack)}):\n\n` + lines.join('\n') +
-        '\n\nA datasource-search item stores the chosen entry (label, description, codes) in a coded property ' +
-        'of its content: call search_dataset, then get_item / get_event_type for the content shape.'
+        '\n\nA datasource-search item stores the chosen entry, as search_dataset returns it, in a coded property ' +
+        'of its content: call search_dataset, then get_item / get_event_type for the content shape. ' +
+        'manifestation is used by no item field: its entries go in an allergy\'s content.reactions[].manifestations.'
     }]
   };
 }

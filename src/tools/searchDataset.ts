@@ -6,7 +6,8 @@ import { policyFetch, UpstreamError } from '../lib/fetchPolicy.ts';
 
 export const searchDatasetInput = {
   datasource: z.string().min(1).describe(
-    'The datasource key from list_datasources: "condition", "finding", "medication", "procedure", "treatment", "allergen".'
+    'The datasource key from list_datasources: "condition", "finding", "medication", "procedure", "treatment", "allergen", ' +
+    '"manifestation" (what an allergic reaction was).'
   ),
   query: z.string().min(1).describe(
     'Search text (at least 3 characters), e.g. "endometriosis", "metformin". ' +
@@ -55,8 +56,9 @@ export async function searchDatasetHandler (
       type: 'text',
       text: `${all.length} "${datasource}" entr${all.length === 1 ? 'y' : 'ies'} matched "${query}"` +
         (all.length > entries.length ? ` (showing ${entries.length})` : '') +
-        '. Copy the chosen entry\'s label, description and codes, unchanged, into the coded property of the ' +
-        'item\'s content (e.g. content.condition, content.drug, content.regimen: see get_event_type for the shape). ' +
+        `. Copy the chosen entry as returned (${fields.join(', ')}), unchanged, into the coded property of the ` +
+        'item\'s content (e.g. content.condition, content.drug, content.allergen; a manifestation as one entry of ' +
+        'content.reactions[].manifestations: see get_event_type for the shape). ' +
         'Never edit or invent codes.'
     }, {
       type: 'text',

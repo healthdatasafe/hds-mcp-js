@@ -219,7 +219,7 @@ export function buildServer (
 
   server.tool(
     'list_datasources',
-    'List the HDS datasets (curated, coded lists: conditions, findings, medications, procedures, treatments, allergens) and the items that take a value from each. Use search_dataset to look up an entry. No account needed.',
+    'List the HDS datasets (curated, coded lists: conditions, findings, medications, procedures, treatments, allergens, allergic-reaction manifestations) and the items that take a value from each. Use search_dataset to look up an entry. No account needed.',
     listDatasourcesInput,
     wrap('list_datasources', listDatasourcesHandler)
   );

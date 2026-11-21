@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### Added
+- Allergy reactions (data-model 4.23.0, plan 133): `search_dataset` and `list_datasources` name the `manifestation`
+  dataset; the `letter` and `app-export` guides write a reaction's manifestation from it (`{ label, codes }` as
+  returned) or as `{ text }` when nothing matches. `search_dataset` now names the fields to copy from the pack's
+  `valueFields` instead of a fixed "label, description and codes" (a manifestation has no description).
 - Allergies (data-model 4.21.0, plan 133): the `letter` guide says how to write `allergy-coded` / `allergy-basic`
   (status stated, never defaulted; no confirmed by default; unknown onset; reactions as text, since the pack has
   no `manifestation` datasource yet; `lastOccurrence` as a partial date), and `app-export` the FHIR
