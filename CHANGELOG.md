@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### Added
+- No known allergy (data-model `allergy-none-known`, plan 133, needs the pack release that ships it): the `letter`
+  guide writes a "no known allergies" line (NKA, NKDA, no known drug, food or environmental allergies) as
+  `allergy-none-known`, the scope as written, the letter date as time, `verificationStatus` only when stated, never
+  beside an allergen; a no-known animal, insect or latex allergy is still not written. The `app-export` guide places a
+  FHIR "no known allergy" AllergyIntolerance there by its code or exact text (FHIR-MAPPING.md § No known allergy)
+  instead of skipping it, and names the ones still refused (animal, insect, latex, `no-allergy-info`, beside an
+  allergen, inactive or resolved, refuted or entered-in-error).
 - Allergy reactions (data-model 4.23.0, plan 133): `search_dataset` and `list_datasources` name the `manifestation`
   dataset; the `letter` and `app-export` guides write a reaction's manifestation from it (`{ label, codes }` as
   returned) or as `{ text }` when nothing matches. `search_dataset` now names the fields to copy from the pack's
