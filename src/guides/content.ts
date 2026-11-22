@@ -177,8 +177,8 @@ Confirm every item below with search_items / get_item before writing.
 - Allergies and intolerances: allergy-coded (content.allergen from the allergen dataset), else
   allergy-basic (name as printed). content.status is required: active, inactive or resolved as the
   letter states it; not stated: ask the patient, never default it. verificationStatus only when
-  stated (unconfirmed or confirmed), never confirmed by default. A "no known allergies" line is
-  not written (no item for it yet); a refuted or erroneous allergy is not written. time = onset;
+  stated (unconfirmed or confirmed), never confirmed by default. A refuted or erroneous allergy
+  is not written. time = onset;
   not known (the usual case): hdsTimePrecision "unknown", time the letter date. No duration.
   categories (food, medication, environment, biologic) only when stated, never an empty list;
   type (allergy, intolerance) and criticality (low, high, unable-to-assess) only when stated.
@@ -187,6 +187,12 @@ Confirm every item below with search_items / get_item before writing.
   as printed (e.g. "hives"); a reaction needs at least one, and no reaction = no reactions key.
   lastOccurrence as YYYY, YYYY-MM or YYYY-MM-DD,
   never a full timestamp.
+- "No known allergies" (NKA, NKDA, no known drug, food or environmental allergies):
+  allergy-none-known, never an allergen. content.scope as written: all, medication (drug, NKDA),
+  food or environment. time = the letter date, at its precision, never "unknown"; no duration.
+  verificationStatus only when stated; notes optional; no status or other allergy field. Never in
+  the same event as an allergen. A no-known animal, insect or latex allergy is not written (no
+  narrower scope).
 - Medications: medication-prescription-coded or medication-intake-coded; no coded match: a
   prescription goes to medication-prescription-basic (name as printed, optional posology), an
   intake to medication-intake-basic (name as printed). drug.label = the name as printed, a brand
@@ -282,15 +288,25 @@ through the chat (site-agents#36).
   resolved; no abatement: no duration key, never 0 or null.
   AllergyIntolerance (FHIR-MAPPING.md § AllergyIntolerance): code with an allergen-dataset match:
   allergy-coded, else allergy-basic by its text or display (a code outside SNOMED-CT and RxNorm is
-  lost). Skip a "no known allergy" record (SNOMED-CT 716186003 and its children, IPS
-  no-known-* or no-allergy-info, or that text) and verificationStatus refuted or
-  entered-in-error. clinicalStatus (active, inactive, resolved) is content.status; none: not
-  imported. Time: onsetDateTime, else onsetPeriod.start, at their precision; onsetAge, onsetRange,
+  lost); a "no known allergy" record never goes on those two (below). Skip verificationStatus
+  refuted or entered-in-error. clinicalStatus (active, inactive, resolved) is content.status;
+  none: not imported. Time: onsetDateTime, else onsetPeriod.start, at their precision; onsetAge, onsetRange,
   onsetString or no onset: hdsTimePrecision "unknown", time the recordedDate (else now), the stated
   onset as text in notes ("Onset: at age 4 years"). recordedDate is never the onset. No duration.
   category, type, criticality, reaction severity as their codes; a value outside the set is left
   out. reaction[]: each manifestation coding matched in the manifestation dataset as { label, codes }
   as returned, else { text } (its text, else a display); severity; description as notes. lastOccurrence: its date part.
+  "No known allergy" AllergyIntolerance (FHIR-MAPPING.md § No known allergy): allergy-none-known,
+  content.scope from its code: SNOMED-CT 716186003 or the retired 160244002 all, 409137002
+  medication, 429625007 food, 428607008 environment; IPS no-known-allergies,
+  no-known-medication-allergies, no-known-food-allergies, no-known-environmental-allergies their
+  scope; a code.text or display that is exactly NKDA or "no known drug allergy/allergies":
+  medication; NKA, "no known allergy/allergies", "none known" (or the French or German): all.
+  Time: recordedDate when not in the future, else now; never an onset, no duration.
+  verificationStatus as the source has it, or none; no status. Not imported: animal 716220001,
+  insect 428197003, latex 1003774007 or 716184000 (no narrower scope), no-allergy-info (no
+  information is not "none"), a no-known code beside an allergen coding, clinicalStatus inactive
+  or resolved, verificationStatus refuted or entered-in-error.
 - C-CDA: use the LOINC, SNOMED-CT or ICD-10 codes it carries with search_items and
   search_dataset; same value, unit and date rules.
 - sourceKey from the record's own identity, the same on every run. FHIR:
