@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-23
+
 ### Added
 - Lab reports (data-model 4.30.0, site-agents#54 to #60): the `lab-report` guide carries the 27 verified LOINC codes
   for results that have no item (indirect bilirubin, prealbumin, serum protein electrophoresis fractions, A/G ratio,
