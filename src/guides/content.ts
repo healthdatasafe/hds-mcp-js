@@ -143,9 +143,25 @@ https://github.com/healthdatasafe/data-model/blob/main/documentation/BLOOD-CHEMI
   code }] }, value, unit (UCUM code: umol/L, 10*9/L, {copies}/mL), unitText as printed,
   comparator, valueText (negative, 1:160), notes. Range and flag as above, limits in unit.
   Never for an analyte an item owns (search its LOINC code first). Only a LOINC code the report
-  prints or that you verified, never a guessed one. To check a code, query a terminology
-  server with the code, never with the test name. A result you cannot code: keep it aside and
-  tell the patient (missing-item).
+  prints, one from the verified table below, or one you verified; never a guessed one. To check
+  a code, query a terminology server with the code, never with the test name. A result you
+  cannot code: keep it aside and tell the patient (missing-item).
+- Verified codes for the coded fallback (data-model BLOOD-CHEMISTRY.md § Verified codes for
+  frequent coded results, LOINC 2.83). Value and unit as printed: a % stays 62.5 with unit "%".
+  Indirect (unconjugated, "libre") bilirubin: mg/L or mg/dL 1971-1, umol/L 14630-8.
+  Prealbumin (transthyretin): g/L, mg/L or mg/dL 14338-8, umol/L 77192-3.
+  Serum protein electrophoresis, % then g/L: albumin 13980-8 / 2862-1; alpha-1 13978-2 /
+  2865-4; alpha-2 13981-6 / 2868-8; beta (one line) 13982-4 / 2871-2; beta-1 32732-0 /
+  32730-4; beta-2 32733-8 / 32731-2; gamma 13983-2 / 2874-6. Not the albumin or globulin
+  items: those are chemistry assays.
+  Albumin/globulin ratio, unit {ratio}: from the electrophoresis 44429-9, else 1759-0.
+  Lymphocyte subsets, % of lymphocytes (unit %) then count (/mm3 or /uL, unit /uL): CD3
+  8124-0 / 8122-4; CD4 8123-2 / 24467-3; CD8 8101-8 / 14135-8. CD4/CD8 ratio 54218-3, {ratio}.
+  A % of CD3 or of leukocytes is not these codes. A ratio is unit {ratio}, never 1.
+  A ratio or an indirect bilirubin only when the lab printed it, never computed.
+- Counts printed per mm3 are per uL (1 mm3 = 1 uL): a full count (6 500/mm3) goes to the
+  "/μL (/mm³)" option of the item; a scaled count (6,5 10³/mm³, 4,50 10⁶/mm³) is the number of the
+  item's first option (10⁹/L, 10¹²/L), never the /μL one.
 - Time: when the sample was taken (its date, and time of day when printed), not the report date.
   Date only: 12:00 UTC that day, clientData.hdsTimePrecision "day".
 - sourceKey per result, from the sample date and the analyte, e.g.
@@ -329,6 +345,10 @@ label, or a code printed on the document. Still nothing:
    be charted, compared or exported (llms-full.txt §3).
 2. A lab result whose analyte has no item, or whose item lacks the printed unit, can go to the
    coded lab fallback (lab-result/coded-v1, see lab-report). The gap is still worth reporting.
+   Not gaps, decided (data-model PROFILE.md § Not modelled): emergency contacts and a trusted
+   person for health decisions (another person's contact details) are not stored; advance
+   directives and organ donation are stored as the document itself (document kinds
+   advance-directive, organ-donor-card, emergency-card), a summary line alone is not.
 3. Otherwise tell the patient plainly, e.g. "Health Data Safe has no place for this kind of data
    yet, so I cannot store it properly. I will keep these values aside for now." Keep them in the
    conversation; write them nowhere. The patient keeps the original document.

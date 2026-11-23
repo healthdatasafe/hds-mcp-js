@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- Lab reports (data-model 4.30.0, site-agents#54 to #60): the `lab-report` guide carries the 27 verified LOINC codes
+  for results that have no item (indirect bilirubin, prealbumin, serum protein electrophoresis fractions, A/G ratio,
+  CD3/CD4/CD8 subsets, CD4/CD8 ratio), so an agent stores them in `lab-result/coded-v1` instead of keeping them aside;
+  a count printed per mm³ goes to the item's "/μL (/mm³)" option. The `missing-item` guide says emergency contacts,
+  a trusted person, advance directives and organ donation are decided, not gaps (site-agents#61 to #63).
 - No known allergy (data-model `allergy-none-known`, plan 133, needs the pack release that ships it): the `letter`
   guide writes a "no known allergies" line (NKA, NKDA, no known drug, food or environmental allergies) as
   `allergy-none-known`, the scope as written, the letter date as time, `verificationStatus` only when stated, never
