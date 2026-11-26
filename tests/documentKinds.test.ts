@@ -64,6 +64,23 @@ const pack = {
         type: { system: 'http://snomed.info/sct', code: '2', display: 'x' },
         timeBasis: 'creation',
         deprecated: true
+      },
+      'other-patient-record': {
+        label: { en: 'Other patient record', fr: 'Autre dossier' },
+        description: { en: 'x', fr: 'x' },
+        class: { system: 'http://snomed.info/sct', code: '184216000', display: 'Patient record type' },
+        type: { system: 'http://snomed.info/sct', code: '419891008', display: 'Record artifact' },
+        timeBasis: 'creation'
+      }
+    },
+    detailKinds: {
+      'menstrual-cycle-chart': {
+        label: { en: 'Menstrual cycle chart', fr: 'Tableau de cycle menstruel' },
+        description: { en: 'A day-by-day chart.', fr: 'Un tableau.' },
+        class: { system: 'http://snomed.info/sct', code: '184216000', display: 'Patient record type' },
+        type: { system: 'http://snomed.info/sct', code: '419891008', display: 'Record artifact' },
+        detail: { system: 'https://hds.ngo/fhir/CodeSystem/document-kind', code: 'menstrual-cycle-chart', display: 'Menstrual cycle chart' },
+        timeBasis: 'creation'
       }
     }
   }
@@ -85,4 +102,18 @@ test('list_document_kinds: the list, one kind\'s Codings, unknown key', async (t
   });
   assert.match((await listDocumentKindsHandler({ key: 'gone' })).content[0].text, /Deprecated/);
   await assert.rejects(listDocumentKindsHandler({ key: 'nope' }), /Unknown document kind "nope"/);
+});
+
+test('list_document_kinds: a detail kind (4.32.0) is listed after its kind and gives its detail Coding', async (t) => {
+  t.mock.method(globalThis, 'fetch', async () => new Response(JSON.stringify(pack), { status: 200 }));
+  const { listDocumentKindsHandler } = await import('../src/tools/listDocumentKinds.ts');
+  const list = (await listDocumentKindsHandler({})).content[0].text;
+  assert.ok(list.indexOf('**other-patient-record**') < list.indexOf('**menstrual-cycle-chart**'));
+  assert.match(list, /type 419891008 Record artifact \+ detail menstrual-cycle-chart · timeBasis creation/);
+  const one = await listDocumentKindsHandler({ key: 'menstrual-cycle-chart' });
+  assert.match(one.content[0].text, /detail as content\.type\[1\]/);
+  const k = pack.documentKinds.detailKinds['menstrual-cycle-chart'];
+  assert.deepEqual(JSON.parse(one.content[1].text.replace(/```json\n|\n```/g, '')), { class: k.class, type: k.type, detail: k.detail });
+  const plain = await listDocumentKindsHandler({ key: 'other-patient-record' });
+  assert.doesNotMatch(plain.content[0].text, /detail/);
 });

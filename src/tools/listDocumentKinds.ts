@@ -3,7 +3,9 @@ import { loadPack, en } from '../dataModel/pack.ts';
 import { packLabel } from '../dataModel/eventTypes.ts';
 
 // The document kinds of the data model (4.17.0, pack.documentKinds, DOCUMENTS.md § Document kinds): which class and
-// type Codings a file/xds-v1 document writes, and which printed date is its event time.
+// type Codings a file/xds-v1 document writes, and which printed date is its event time. The kinds no CH Term pair names
+// (4.32.0, documentKinds.detailKinds) share the class and type of one of them and add `detail`, the second Coding of
+// `type`, listed after the kind they share their codes with (as hds-lib's documentKinds).
 
 interface Coding { system: string; version?: string; code: string; display: string }
 interface DocumentKind {
@@ -11,8 +13,23 @@ interface DocumentKind {
   description: Record<string, string>;
   class: Coding;
   type: Coding;
+  detail?: Coding;
   timeBasis: 'service' | 'creation';
   deprecated?: true;
+}
+
+/** Every kind, a detail kind after the one it shares its class and type with */
+function allKinds (documentKinds: any): Record<string, DocumentKind> {
+  const kinds = (documentKinds?.kinds ?? {}) as Record<string, DocumentKind>;
+  const detailKinds = (documentKinds?.detailKinds ?? {}) as Record<string, DocumentKind>;
+  const all: Record<string, DocumentKind> = {};
+  for (const [key, k] of Object.entries(kinds)) {
+    all[key] = k;
+    for (const [detailKey, d] of Object.entries(detailKinds)) {
+      if (d.class.code === k.class.code && d.type.code === k.type.code) all[detailKey] = d;
+    }
+  }
+  return all;
 }
 
 export const listDocumentKindsInput = {
@@ -33,7 +50,7 @@ export async function listDocumentKindsHandler (
   args: { key?: string }
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const pack = await loadPack();
-  const kinds = (pack.documentKinds?.kinds ?? {}) as Record<string, DocumentKind>;
+  const kinds = allKinds(pack.documentKinds);
   if (Object.keys(kinds).length === 0) {
     return { content: [{ type: 'text', text: `The loaded data model (${packLabel(pack)}) has no document kinds: they came with data-model 4.17.0.` }] };
   }
@@ -43,19 +60,20 @@ export async function listDocumentKindsHandler (
     return {
       content: [{
         type: 'text',
-        text: `Document kind ${args.key}: ${en(kind.label)}. Copy class into content.class and type as content.type[0], ` +
-          `unchanged. Event time: ${TIME_BASIS[kind.timeBasis]} (timeBasis ${kind.timeBasis}).` +
+        text: `Document kind ${args.key}: ${en(kind.label)}. Copy class into content.class and type as content.type[0]` +
+          (kind.detail ? ', then detail as content.type[1] (without it the document reads as the kind with the same class and type)' : '') +
+          `, unchanged. Event time: ${TIME_BASIS[kind.timeBasis]} (timeBasis ${kind.timeBasis}).` +
           (kind.deprecated ? ' Deprecated: a stored document still reads back, never pick it for a new one.' : '')
       }, {
         type: 'text',
-        text: '```json\n' + JSON.stringify({ class: kind.class, type: kind.type }, null, 2) + '\n```'
+        text: '```json\n' + JSON.stringify({ class: kind.class, type: kind.type, ...(kind.detail ? { detail: kind.detail } : {}) }, null, 2) + '\n```'
       }]
     };
   }
   const lines = Object.entries(kinds).filter(([, k]) => !k.deprecated).map(([key, k]) => {
     const other = ['fr', 'de', 'it'].filter((l) => k.label[l]).map((l) => `${l} ${k.label[l]}`).join(', ');
     return `- **${key}** — ${en(k.label)}${other ? ` (${other})` : ''}: ${en(k.description)}\n` +
-      `  class ${code(k.class)} · type ${code(k.type)} · timeBasis ${k.timeBasis}`;
+      `  class ${code(k.class)} · type ${code(k.type)}${k.detail ? ` + detail ${k.detail.code}` : ''} · timeBasis ${k.timeBasis}`;
   });
   return {
     content: [{
