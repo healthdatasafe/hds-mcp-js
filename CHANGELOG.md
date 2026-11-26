@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-26
+
 ### Added
 - Document kinds no CH Term pair names (data-model 4.32.0, `documentKinds.detailKinds`, plan 141): `list_document_kinds`
   lists them after the kind they share their class and type with (`menstrual-cycle-chart` after `other-patient-record`), and
