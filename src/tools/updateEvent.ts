@@ -31,7 +31,7 @@ export async function updateEventHandler (
     if (cur?.error) throw new Error(`Pryv events.getOne failed: ${cur.error.message ?? cur.error.id}`);
     const type = update.type ?? cur.event.type;
     const content = 'content' in update ? update.content : cur.event.content;
-    const problems = validateEvent(await loadPack(), type, content, { attachFile });
+    const problems = validateEvent(await loadPack(), type, content, { attachFile, streamIds: cur.event.streamIds ?? [] });
     if (problems.length > 0) throw new Error(`Update refused, nothing written: ${problems.join('; ')}`);
   }
   const [res] = await apiBatch([{ method: 'events.update', params: { id, update } }]);

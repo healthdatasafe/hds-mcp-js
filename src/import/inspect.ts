@@ -1,6 +1,6 @@
 import path from 'node:path';
 import type { DataModelPack } from '../dataModel/pack.ts';
-import { contentErrors, itemEventTypes } from '../dataModel/eventTypes.ts';
+import { contentErrors, itemEventTypes, optionProblem } from '../dataModel/eventTypes.ts';
 import { normalizeDocumentUniqueId, DOCUMENT_UNIQUE_ID_KEY } from '../dataModel/documentUniqueId.ts';
 import { DOCUMENTS_ROOT, documentStreamsProblem } from '../dataModel/documentStreams.ts';
 import { ATTACH_MAX_BYTES, DOCUMENT_EVENT_TYPE, FORMATS, type FileFormat } from '../tools/attachFile.ts';
@@ -158,6 +158,9 @@ export async function normalizePackage (pkg: LoadedPackage, pack: DataModelPack)
     const errs = contentErrors(pack, type, resolveRefs(v.content, () => 'ref-placeholder-id'));
     // the type and the schema keyword only: the field path may hold the record's own keys
     for (const e of errs ?? []) bad('content-invalid', line, `${type}:${e.keyword}`);
+    // an item with options takes one of them (the item key only: the value is the record's)
+    const notOption = errs?.length === 0 ? optionProblem(pack, streamIds, type, v.content) : null;
+    if (notOption != null) bad('content-not-an-option', line, notOption.key);
 
     // time inside what a re-run reads (1900-2100); never left to the core's "now"
     const time = v.time;

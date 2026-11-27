@@ -54,7 +54,7 @@ export async function createEventHandler (
   { attachFile = false }: { attachFile?: boolean } = {}
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const pack = await loadPack();
-  const problems = validateEvent(pack, args.type, args.content, { attachFile });
+  const problems = validateEvent(pack, args.type, args.content, { attachFile, streamIds: args.streamIds });
   const isDocument = args.type === DOCUMENT_EVENT_TYPE;
   const streamsProblem = isDocument ? documentStreamsProblem(pack, args.streamIds) : null;
   if (streamsProblem != null) problems.push(streamsProblem);
