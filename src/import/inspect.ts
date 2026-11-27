@@ -2,6 +2,7 @@ import path from 'node:path';
 import type { DataModelPack } from '../dataModel/pack.ts';
 import { contentErrors, itemEventTypes } from '../dataModel/eventTypes.ts';
 import { normalizeDocumentUniqueId, DOCUMENT_UNIQUE_ID_KEY } from '../dataModel/documentUniqueId.ts';
+import { DOCUMENTS_ROOT, documentStreamsProblem } from '../dataModel/documentStreams.ts';
 import { ATTACH_MAX_BYTES, DOCUMENT_EVENT_TYPE, FORMATS, type FileFormat } from '../tools/attachFile.ts';
 import { ALL_TIME } from '../tools/getEvents.ts';
 import { type LoadedPackage, type Problem, PackageError, openInside, safeDetail } from './pkg.ts';
@@ -192,6 +193,8 @@ export async function normalizePackage (pkg: LoadedPackage, pack: DataModelPack)
     } else if (attachmentRequired) {
       bad('attachment-missing', line, type);
     }
+    // an importer writes a document on the root only: filing is hers (DOCUMENTS.md § Filing)
+    if (type === DOCUMENT_EVENT_TYPE && documentStreamsProblem(pack, streamIds) != null) bad('document-not-on-root', line, DOCUMENTS_ROOT);
     if (type === DOCUMENT_EVENT_TYPE && (v.content as any)?.uniqueId != null) {
       const id = normalizeDocumentUniqueId((v.content as any).uniqueId);
       if (id == null) bad('document-uniqueid-not-stored', line);

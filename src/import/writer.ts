@@ -141,7 +141,10 @@ function wantedClientData (e: PkgEvent, content: any, ids: string[], stored: any
 function diff (stored: any, want: any): Record<string, unknown> | null {
   const update: Record<string, unknown> = {};
   for (const f of ['content', 'time', 'type']) if (canonical(stored[f] ?? null) !== canonical(want[f] ?? null)) update[f] = want[f];
-  if (canonical(stored.streamIds ?? []) !== canonical(want.streamIds)) update.streamIds = want.streamIds;
+  // a document's streams are hers once it exists: she files it (a class stream) and shares it (share-… ids); a re-run
+  // that wrote them back would move it to the root and stop sharing it (plan 144)
+  const ownStreams = stored.type === DOCUMENT_EVENT_TYPE && want.type === DOCUMENT_EVENT_TYPE;
+  if (!ownStreams && canonical(stored.streamIds ?? []) !== canonical(want.streamIds)) update.streamIds = want.streamIds;
   const storedDuration = typeof stored.duration === 'number' && stored.duration > 0 ? stored.duration : null;
   const read = want.duration == null ? 0 : (want.time + want.duration) - want.time;
   const wantDuration = read > 0 ? read : null;

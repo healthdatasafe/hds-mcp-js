@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### Changed
+- Documents and the class streams of data-model 4.35.0 (plan 144, DOCUMENTS.md § Filing: filing is hers, every other
+  writer writes on the root): `create_event` writes a new document on `["documents"]` alone, refusing a stream below it
+  (`documents-clinical`, …) or a share, and the import kit refuses such a line (`document-not-on-root`). The result of
+  `create_event` (and of `update_event` after a content change) says the document is not filed and which class her HDS
+  app proposes; `list_document_kinds({ key })` says it too. The guides tell the person that filing, which decides who
+  the document is shared with, is theirs in their HDS app.
+
+### Fixed
+- The import kit no longer rewrites a document's `streamIds` on a re-run: a document she had filed went back to the root,
+  and one she had shared in a chat lost its share ids, so it was no longer shared.
+
 ## [0.28.0] - 2026-11-26
 
 ### Added

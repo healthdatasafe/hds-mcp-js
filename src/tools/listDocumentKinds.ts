@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { loadPack, en } from '../dataModel/pack.ts';
 import { packLabel } from '../dataModel/eventTypes.ts';
+import { DOCUMENTS_ROOT, streamForKind, streamLabel } from '../dataModel/documentStreams.ts';
 
 // The document kinds of the data model (4.17.0, pack.documentKinds, DOCUMENTS.md § Document kinds): which class and
 // type Codings a file/xds-v1 document writes, and which printed date is its event time. The kinds no CH Term pair names
@@ -57,12 +58,17 @@ export async function listDocumentKindsHandler (
   if (args.key != null) {
     const kind = kinds[args.key];
     if (!kind) throw new Error(`Unknown document kind "${args.key}". Call list_document_kinds without a key for the list.`);
+    const stream = streamForKind(pack, args.key);
     return {
       content: [{
         type: 'text',
         text: `Document kind ${args.key}: ${en(kind.label)}. Copy class into content.class and type as content.type[0]` +
           (kind.detail ? ', then detail as content.type[1] (without it the document reads as the kind with the same class and type)' : '') +
-          `, unchanged. Event time: ${TIME_BASIS[kind.timeBasis]} (timeBasis ${kind.timeBasis}).` +
+          `, unchanged. Event time: ${TIME_BASIS[kind.timeBasis]} (timeBasis ${kind.timeBasis}). ` +
+          `Write it on stream "${DOCUMENTS_ROOT}" (not filed)` +
+          (stream === DOCUMENTS_ROOT
+            ? ', where this kind stays.'
+            : `; the person can file it under "${streamLabel(pack, stream)}" in their HDS app.`) +
           (kind.deprecated ? ' Deprecated: a stored document still reads back, never pick it for a new one.' : '')
       }, {
         type: 'text',
@@ -83,8 +89,9 @@ export async function listDocumentKindsHandler (
         'class\'s other-… kind, or "other". Then list_document_kinds({ key }) gives the exact Codings to copy (a Swiss ' +
         'extension code carries its edition as version). timeBasis: service = ' + TIME_BASIS.service + '; creation = ' +
         TIME_BASIS.creation + '. Only a date from the document\'s body counts, never a fax, scan, print or upload ' +
-        'date; a date with no hour is 12:00 UTC with clientData.hdsTimePrecision "day". Rules: data-model ' +
-        'DOCUMENTS.md, "Document kinds" and "Which date is a document\'s date".\n\n' + lines.join('\n')
+        'date; a date with no hour is 12:00 UTC with clientData.hdsTimePrecision "day". Every document goes on stream ' +
+        `"${DOCUMENTS_ROOT}": filing it in a class is the person's, in their HDS app. Rules: data-model DOCUMENTS.md, "Document ` +
+        'kinds", "Filing" and "Which date is a document\'s date".\n\n' + lines.join('\n')
     }]
   };
 }

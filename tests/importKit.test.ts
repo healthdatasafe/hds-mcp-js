@@ -473,3 +473,29 @@ test('[IMP24] two documents of the package with one identifier are refused', asy
   const { report } = await run(await makePackage([doc(1), doc(2)]), fakeCore());
   assert.ok(report.problems.some((p) => p.code === 'document-uniqueid-duplicate' && p.line === 2));
 });
+
+// plan 144: an importer writes a document on `documents` only (filing is hers); a re-run never moves a document
+test('[IMP25] a document on a stream below documents, or without documents first, is refused', async () => {
+  const docLine = (streamIds: string[], i: number) => ({ sourceKey: `testkit:doc:${i}`, type: 'file/xds-v1', streamIds, content: { title: 't' }, time: T0, attachment: 'files/report.pdf' });
+  const filingPack: DataModelPack = { ...pack, streams: [...pack.streams.filter((s: any) => s.id !== 'documents'), { id: 'documents', label: { en: 'Documents' }, children: [{ id: 'documents-clinical' }] }] };
+  const pkg = await loadPackage(await makePackage([docLine(['documents-clinical'], 1), docLine(['documents', 'documents-clinical'], 2), docLine(['documents'], 3)]));
+  const report = buildReport(pkg, filingPack, await normalizePackage(pkg, filingPack));
+  const codes = report.problems.filter((p) => p.code === 'document-not-on-root').map((p) => p.line);
+  assert.deepEqual(codes, [1, 2]);
+});
+
+test('[IMP26] a re-run leaves a document she filed and shared: no write, verify clean', async () => {
+  const core = fakeCore();
+  const dir = await makePackage(baseEvents());
+  await (await run(dir, core)).write();
+  const doc = [...core.events.values()].find((e) => e.type === 'file/xds-v1');
+  assert.deepEqual(doc.streamIds, ['documents']);
+  doc.streamIds = ['documents-admin', 'share-abc123'];
+  core.writes.length = 0;
+  const r = await run(dir, core);
+  const res = await r.write();
+  assert.deepEqual(core.writes, [], 'nothing written');
+  assert.equal(res.counts.unchanged, 3);
+  assert.deepEqual(doc.streamIds, ['documents-admin', 'share-abc123']);
+  assert.equal((await r.verify()).different, 0);
+});
