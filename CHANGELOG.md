@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.29.1] - 2026-11-27
+
 ### Fixed
 - `create_event`, `import_batch` and `update_event` refuse a value that is not one of the item's options (select,
   multi-select), even when its eventType allows it (an ovulation test at 0.3, bleeding at 0.5): the HDS apps and the FHIR
