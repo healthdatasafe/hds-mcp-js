@@ -130,7 +130,7 @@ export function buildServer (
 
   server.tool(
     'create_event',
-    'Create a single event (data point) in the connected HDS account. Always call search_items first to find the canonical HDS item for the data type, then get_item to read its spec, and use that streamId + eventType. If no item matches, ask the user before inventing a type. The content is checked against the eventType content schema before writing; an unknown type or invalid content is refused and nothing is written. Optional description (human text every app shows) and clientData (data-model conventions such as sourceKey). ' +
+    'Create a single event (data point) in the connected HDS account. Always call search_items first to find the canonical HDS item for the data type, then get_item to read its spec, and use that streamId + eventType. If no item matches, ask the user before inventing a type. The content is checked against the eventType content schema before writing, and for an item with options (select, multi-select) it must be one of them; an unknown type or invalid content is refused and nothing is written. Optional description (human text every app shows) and clientData (data-model conventions such as sourceKey). ' +
       (http ? '' : 'A medical document (item "document", file/xds-v1) is created without its file: add the file next with attach_file. ') +
       'Refuses on production until the production-write gate is opened.',
     createEventInput,
@@ -139,7 +139,7 @@ export function buildServer (
 
   server.tool(
     'import_batch',
-    'Import many events at once (1–500 per call). Always call search_items first to find the canonical HDS item for each data type, then get_item for its spec, and use those streamId + eventType values. If no item matches for some data, ask the user before inventing a type. Every event is checked against its eventType content schema first; if any fails, the whole batch is refused and nothing is written. Returns the created event ids in input order, so later events can reference earlier ones. Refuses on production until the production-write gate is opened.',
+    'Import many events at once (1–500 per call). Always call search_items first to find the canonical HDS item for each data type, then get_item for its spec, and use those streamId + eventType values. If no item matches for some data, ask the user before inventing a type. Every event is checked against its eventType content schema first, and against its item\'s options when it has some; if any fails, the whole batch is refused and nothing is written. Returns the created event ids in input order, so later events can reference earlier ones. Refuses on production until the production-write gate is opened.',
     importBatchInput,
     wrap('import_batch', (a: Parameters<typeof importBatchHandler>[0]) => importBatchHandler(a, { attachFile: !http }))
   );

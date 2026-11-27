@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- `create_event`, `import_batch` and `update_event` refuse a value that is not one of the item's options (select,
+  multi-select), even when its eventType allows it (an ovulation test at 0.3, bleeding at 0.5): the HDS apps and the FHIR
+  export know the options only. The refusal names the item and its allowed values with their labels; `import_batch`
+  reports each such row. The import kit refuses such a line too (`content-not-an-option`, naming the item, not the value).
+  The item is the one of the event's stream and eventType, as hds-lib resolves it (B-2026-11-27-57).
+
 ## [0.29.0] - 2026-11-27
 
 ### Changed

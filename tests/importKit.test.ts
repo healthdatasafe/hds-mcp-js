@@ -22,10 +22,17 @@ const pack: DataModelPack = {
     'body-weight': { streamId: 'body-weight', eventType: 'mass/kg', type: 'number', label: { en: 'Body weight' } },
     note: { streamId: 'body-notes', eventType: 'note/txt', type: 'text', label: { en: 'Note' } },
     document: { streamId: 'documents', eventType: 'file/xds-v1', type: 'document', label: { en: 'Document' } },
-    practitioner: { streamId: 'encounter-providers', eventType: 'provider/practitioner-v1', type: 'provider', label: { en: 'Practitioner' } }
+    practitioner: { streamId: 'encounter-providers', eventType: 'provider/practitioner-v1', type: 'provider', label: { en: 'Practitioner' } },
+    'fertility-test-opk': {
+      streamId: 'fertility-test-opk',
+      eventType: 'test-result/scale',
+      type: 'select',
+      label: { en: 'Ovulation test' },
+      options: [{ value: -1, label: { en: 'Negative' } }, { value: 1, label: { en: 'Positive' } }]
+    }
   },
   streams: [
-    { id: 'body', label: { en: 'Body' }, children: [{ id: 'body-weight' }, { id: 'body-notes' }] },
+    { id: 'body', label: { en: 'Body' }, children: [{ id: 'body-weight' }, { id: 'body-notes' }, { id: 'fertility-test-opk' }] },
     { id: 'documents', label: { en: 'Documents' } },
     { id: 'encounter', label: { en: 'Care' }, children: [{ id: 'encounter-providers' }] }
   ],
@@ -44,7 +51,8 @@ const pack: DataModelPack = {
           authors: { type: 'array', items: { type: 'object', properties: { eventId: { type: 'string' }, name: { type: 'string' } } } }
         }
       },
-      'provider/practitioner-v1': { type: 'object', properties: { name: { type: 'string' }, identifiers: { type: 'array' } } }
+      'provider/practitioner-v1': { type: 'object', properties: { name: { type: 'string' }, identifiers: { type: 'array' } } },
+      'test-result/scale': { type: 'number', minimum: -1, maximum: 1 }
     }
   }
 };
@@ -171,6 +179,20 @@ test('[IMP2] inspect refuses what a re-run could not handle', async () => {
   }
   assert.equal(report.ok, false);
   assert.ok(!JSON.stringify(report).includes(SECRET), 'no value in a problem');
+});
+
+test('[IMP2b] inspect refuses a value that is not one of the item\'s options, naming the item and not the value', async () => {
+  const dir = await makePackage([
+    { sourceKey: 'testkit:opk:1', itemKey: 'fertility-test-opk', content: 1, time: T0 },
+    { sourceKey: 'testkit:opk:2', itemKey: 'fertility-test-opk', content: 0.37, time: T0 },
+    { sourceKey: 'testkit:opk:3', streamIds: ['fertility-test-opk'], type: 'test-result/scale', content: 0.37, time: T0 }
+  ]);
+  const { report } = await run(dir, fakeCore());
+  assert.deepEqual(report.problems.map((p) => `${p.line}:${p.code}:${p.detail}`), [
+    '2:content-not-an-option:fertility-test-opk', '3:content-not-an-option:fertility-test-opk'
+  ]);
+  assert.equal(report.ok, false);
+  assert.ok(!JSON.stringify(report).includes('0.37'), 'no value in a problem');
 });
 
 test('[IMP3] inspect refuses another writer\'s sourceKey prefix', async () => {

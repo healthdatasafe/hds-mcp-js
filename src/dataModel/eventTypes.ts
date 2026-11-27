@@ -1,5 +1,6 @@
 import AjvDraft04 from 'ajv-draft-04';
 import type { ValidateFunction } from 'ajv';
+import { en } from './pack.ts';
 import type { DataModelPack, ItemDef } from './pack.ts';
 
 // Same options as the data-model tests use for "draft-04 (the cores)".
@@ -28,13 +29,48 @@ export interface ValidateOptions {
   attachFile?: boolean;
   /** import_batch: an attachment type is written one event at a time (create_event, then attach_file). */
   batch?: boolean;
+  /** The event's streams: with them, a value of an item with options must be one of its options. */
+  streamIds?: string[];
+}
+
+/**
+ * The item an event is written to, as hds-lib's `itemsDefs.forEvent` finds it: the first of its streams that carries an
+ * item of this eventType (the active item when a deprecated alias shares the pair). Null when none does.
+ */
+export function itemForEvent (pack: DataModelPack, streamIds: string[], type: string): { key: string; item: ItemDef } | null {
+  for (const streamId of streamIds) {
+    let found: { key: string; item: ItemDef } | null = null;
+    for (const [key, item] of Object.entries(pack.items)) {
+      if (item.streamId !== streamId || !itemEventTypes(item).includes(type)) continue;
+      if (found == null || (found.item.deprecated === true && item.deprecated !== true)) found = { key, item };
+    }
+    if (found != null) return found;
+  }
+  return null;
+}
+
+/**
+ * For an item with options (select, multi-select), the values of `content` that are not one of them: the renderers and
+ * the FHIR export know the options only, so another value the eventType allows is not shown or exported.
+ * Null when the event's item has no options, or every value is one of them.
+ */
+export function optionProblem (pack: DataModelPack, streamIds: string[], type: string, content: unknown): { key: string; values: unknown[]; allowed: string } | null {
+  const found = itemForEvent(pack, streamIds, type);
+  const options = found?.item.options;
+  if (found == null || !Array.isArray(options) || options.length === 0) return null;
+  const allowedValues = options.map((o: any) => o?.value);
+  const given = found.item.type === 'multi-select' && Array.isArray(content) ? content : [content];
+  const values = given.filter((v) => !allowedValues.some((a) => a === v));
+  if (values.length === 0) return null;
+  const allowed = options.map((o: any) => `${JSON.stringify(o?.value)} (${en(o?.label)})`).join(', ');
+  return { key: found.key, values, allowed };
 }
 
 /**
  * Validates one event's type and content against the pack.
  * Returns the problems found, empty when the event can be written.
  */
-export function validateEvent (pack: DataModelPack, type: string, content: unknown, { attachFile = false, batch = false }: ValidateOptions = {}): string[] {
+export function validateEvent (pack: DataModelPack, type: string, content: unknown, { attachFile = false, batch = false, streamIds }: ValidateOptions = {}): string[] {
   const schema = contentSchema(pack, type);
   if (!schema) {
     return [`Unknown event type "${type}": not in the HDS data model (${packLabel(pack)}). Use the eventType from get_item.`];
@@ -45,7 +81,12 @@ export function validateEvent (pack: DataModelPack, type: string, content: unkno
   }
   const validate = compiled.get(type) ?? ajv.compile(schema);
   compiled.set(type, validate);
-  if (validate(content === undefined ? null : content)) return [];
+  if (validate(content === undefined ? null : content)) {
+    const notOption = streamIds != null ? optionProblem(pack, streamIds, type, content) : null;
+    if (notOption == null) return [];
+    return [`content ${notOption.values.map((v) => JSON.stringify(v)).join(', ')} is not an option of item "${notOption.key}". ` +
+      `Allowed values: ${notOption.allowed}`];
+  }
   return (validate.errors ?? []).map((e) =>
     `content${e.instancePath || ''} ${e.message ?? 'is invalid'}` +
     (e.params && Object.keys(e.params).length > 0 ? ` (${JSON.stringify(e.params)})` : '')
