@@ -2,11 +2,15 @@ import { z } from 'zod';
 import { apiPost } from '../lib/apiCall.ts';
 import { loadPack } from '../dataModel/pack.ts';
 import { contentSchema, validateEvent } from '../dataModel/eventTypes.ts';
+import { documentStreamsProblem, filingNote } from '../dataModel/documentStreams.ts';
+import { DOCUMENT_EVENT_TYPE } from './attachFile.ts';
 
 export const createEventInput = {
   streamIds: z.array(z.string()).min(1).describe(
     'Stream IDs the event belongs to. For HDS items, use the canonical streamId from get_item; ' +
-    'for user-created streams, use list_streams to discover. At least one required.'
+    'for user-created streams, use list_streams to discover. At least one required. A document (file/xds-v1) goes ' +
+    'on ["documents"] alone, never on a stream below it or a share: filing and sharing it are the person\'s, in their ' +
+    'HDS app.'
   ),
   type: z.string().describe(
     'Event type. Use the eventType returned by get_item for the canonical HDS item ' +
@@ -51,6 +55,9 @@ export async function createEventHandler (
 ): Promise<{ content: Array<{ type: 'text'; text: string }> }> {
   const pack = await loadPack();
   const problems = validateEvent(pack, args.type, args.content, { attachFile });
+  const isDocument = args.type === DOCUMENT_EVENT_TYPE;
+  const streamsProblem = isDocument ? documentStreamsProblem(pack, args.streamIds) : null;
+  if (streamsProblem != null) problems.push(streamsProblem);
   if (problems.length > 0) {
     throw new Error(`Event refused, nothing written: ${problems.join('; ')}`);
   }
@@ -68,10 +75,12 @@ export async function createEventHandler (
   const res = await apiPost('/events', body);
   const event = (res as any).event ?? res;
   const needsFile = contentSchema(pack, args.type)?.attachmentRequired === true;
+  const filing = isDocument ? filingNote(pack, args.content) : null;
   return {
     content: [{
       type: 'text',
       text: `Created event ${(event as any).id ?? '(no id)'} of type ${args.type} in stream(s) ${args.streamIds.join(', ')}.` +
+        (filing != null ? ' ' + filing : '') +
         (needsFile ? ' It has no file yet: add it with attach_file.' : '')
     }, {
       type: 'text',

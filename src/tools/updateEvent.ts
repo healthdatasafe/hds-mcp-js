@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { apiBatch } from '../lib/apiCall.ts';
 import { loadPack } from '../dataModel/pack.ts';
 import { validateEvent } from '../dataModel/eventTypes.ts';
+import { DOCUMENTS_ROOT, filingNote } from '../dataModel/documentStreams.ts';
+import { DOCUMENT_EVENT_TYPE } from './attachFile.ts';
 
 export const updateEventInput = {
   id: z.string().min(1).describe('The event id (from get_events, or returned by create_event / import_batch).'),
@@ -34,8 +36,12 @@ export async function updateEventHandler (
   }
   const [res] = await apiBatch([{ method: 'events.update', params: { id, update } }]);
   if (res?.error) throw new Error(`Pryv events.update failed: ${res.error.message ?? res.error.id}`);
+  const ev = res.event;
+  const filing = ev?.type === DOCUMENT_EVENT_TYPE && 'content' in update && (ev.streamIds ?? [])[0] === DOCUMENTS_ROOT
+    ? filingNote(await loadPack(), ev.content)
+    : null;
   return {
-    content: [{ type: 'text', text: `Updated event ${id}.` }, {
+    content: [{ type: 'text', text: `Updated event ${id}.` + (filing != null ? ' ' + filing : '') }, {
       type: 'text',
       text: '```json\n' + JSON.stringify(res.event, null, 2) + '\n```'
     }]

@@ -41,11 +41,14 @@ remote connector cannot: say so, store the values you extract, they keep the fil
 
 ## 2b. Original documents (local MCP only)
 A PDF, JPEG or PNG of up to 20 MB, one file per document, only those the patient asks to keep:
-- ensure_streams({ items: ["document"] }); then create_event on stream "documents", type
-  file/xds-v1, content from get_event_type (class, type, title, language), with a sourceKey.
-  class and type: pick the kind with list_document_kinds, then copy its Codings from
-  list_document_kinds({ key }) unchanged; never make up a code. Event time per the kind's timeBasis:
-  the date of the care reported, or the date it was written; never a fax, scan or upload date.
+- ensure_streams({ items: ["document"] }); then create_event on stream "documents" (only: never a
+  stream below it), type file/xds-v1, content from get_event_type (class, type, title, language),
+  with a sourceKey. class and type: pick the kind with list_document_kinds, then copy its Codings
+  from list_document_kinds({ key }) unchanged; never make up a code. Event time per the kind's
+  timeBasis: the date of the care reported, or the date it was written; never a fax, scan or
+  upload date.
+- The document is not filed. Tell them: in their HDS app they file it (e.g. under Clinical
+  documents), and filing decides who it is shared with, so it is theirs to do.
 - A document with its own identifier (an XDS uniqueId from a record export, a FHIR
   masterIdentifier): first get_events({ documentUniqueId, state: "all" }). Found: it is already held;
   fill only what is missing, never write it twice. Not found: create it with content.uniqueId and
@@ -108,6 +111,9 @@ package folder on the patient's computer and let the import tools write it:
   document's PDF/JPEG/PNG), evidence { file, page } (the source page, for the review only).
   Where an event id of the package is expected (supersedes, authors[].eventId, encounterId), write
   { "$ref": "<sourceKey>" }.
+- A document goes in with itemKey "document" (stream "documents", not filed: filing is theirs, in
+  their HDS app); streamIds below "documents" are refused (document-not-on-root). Once written,
+  its streams are theirs (they file and share it): a re-run never moves it.
 - import_inspect: fix every blocking problem (line numbers) and inspect again. It returns the roots
   and importName for connect: tell the patient those kinds of data before signing in.
 - import_review: the page opens in their browser; they check the values there, not in the chat.
