@@ -1,6 +1,6 @@
 {
   "name": "hds-mcp",
-  "version": "0.28.0",
+  "version": "0.29.0",
   "description": "HDS MCP server for AI assistants (non-developer first): the hosted HDS connector (HTTP, OAuth, a URL to add) and the local server (stdio, Claude Desktop extension) that also imports records from files",
   "type": "module",
   "engines": {

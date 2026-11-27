@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-27
+
 ### Changed
 - Documents and the class streams of data-model 4.35.0 (plan 144, DOCUMENTS.md § Filing: filing is hers, every other
   writer writes on the root): `create_event` writes a new document on `["documents"]` alone, refusing a stream below it
